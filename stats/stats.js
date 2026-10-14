@@ -1,9 +1,11 @@
 /**
- * Threads 关键词过滤助手 - 统计中心页面控制器
+ * Threads伴侣 - 统计中心页面控制器
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // DOM 引用
+  const themeToggleBtn = document.getElementById('themeToggleBtn');
+  const themeIconSun = document.getElementById('themeIconSun');
+  const themeIconMoon = document.getElementById('themeIconMoon');
   const langSelect = document.getElementById('langSelect');
   const exportBtn = document.getElementById('exportBtn');
   const clearStatsBtn = document.getElementById('clearStatsBtn');
@@ -20,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const dateSelect = document.getElementById('dateSelect');
   const dailyTableBody = document.getElementById('dailyTableBody');
 
+  let currentTheme = 'light';
   let statsData = {
     totalBlocked: 0,
     dailyStats: {},
@@ -28,9 +31,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let activeKeywordsList = [];
 
-  /**
-   * 初始化语言环境
-   */
+  function applyTheme(theme) {
+    currentTheme = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    if (currentTheme === 'dark') {
+      themeIconSun.style.display = 'block';
+      themeIconMoon.style.display = 'none';
+    } else {
+      themeIconSun.style.display = 'none';
+      themeIconMoon.style.display = 'block';
+    }
+  }
+
+  function initTheme() {
+    if (chrome.storage && chrome.storage.sync) {
+      chrome.storage.sync.get(['threads_filter_theme'], (res) => {
+        applyTheme(res.threads_filter_theme || 'light');
+      });
+    } else {
+      applyTheme('light');
+    }
+  }
+
+  function toggleTheme() {
+    const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+    applyTheme(nextTheme);
+    if (chrome.storage && chrome.storage.sync) {
+      chrome.storage.sync.set({ threads_filter_theme: nextTheme });
+    }
+    renderTrendChart();
+  }
+
   function setupI18n() {
     if (window.I18n) {
       window.I18n.initLanguage((lang) => {
@@ -49,20 +80,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /**
-   * 加载数据
-   */
   function loadAllData() {
     const storageLocal = (chrome.storage && chrome.storage.local) ? chrome.storage.local : chrome.storage.sync;
     if (!storageLocal) return;
 
-    // 读取统计
     storageLocal.get(['threads_filter_stats'], (res) => {
       if (res && res.threads_filter_stats) {
         statsData = Object.assign(statsData, res.threads_filter_stats);
       }
 
-      // 读取关键词配置
       if (chrome.storage && chrome.storage.sync) {
         chrome.storage.sync.get(['threads_filter_config'], (cfgRes) => {
           if (cfgRes && cfgRes.threads_filter_config && cfgRes.threads_filter_config.keywords) {
@@ -76,9 +102,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /**
-   * 格式化最近 N 天的日期数组 (YYYY-MM-DD)
-   */
   function getLastNDays(n) {
     const dates = [];
     const now = new Date();
@@ -90,9 +113,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return dates;
   }
 
-  /**
-   * 渲染数据总览
-   */
   function renderOverview() {
     const todayStr = new Date().toISOString().slice(0, 10);
     const todayCount = (statsData.dailyStats[todayStr] && statsData.dailyStats[todayStr].total) || 0;
@@ -110,16 +130,13 @@ document.addEventListener('DOMContentLoaded', () => {
     valMaxDayBlocked.textContent = maxDayCount.toLocaleString();
   }
 
-  /**
-   * 渲染 14 天过滤趋势柱状图 (SVG)
-   */
   function renderTrendChart() {
     const days = getLastNDays(14);
     const counts = days.map(d => (statsData.dailyStats[d] && statsData.dailyStats[d].total) || 0);
 
     const maxVal = Math.max(...counts, 10);
     const svgWidth = 760;
-    const svgHeight = 160;
+    const svgHeight = 150;
     const barWidth = 32;
     const gap = (svgWidth - barWidth * days.length) / (days.length + 1);
 
@@ -131,18 +148,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const x = gap + index * (barWidth + gap);
       const y = svgHeight - barHeight;
 
-      // 槽位背景柱
       svgInnerHtml += `
         <rect class="trend-bg-bar" x="${x}" y="0" width="${barWidth}" height="${svgHeight}">
-          <title>${day}: ${count} 次拦截</title>
+          <title>${day}: ${count}</title>
         </rect>
       `;
 
-      // 实际计数柱
       if (count > 0) {
         svgInnerHtml += `
           <rect class="trend-bar" x="${x}" y="${y}" width="${barWidth}" height="${barHeight}">
-            <title>${day}: ${count} 次拦截</title>
+            <title>${day}: ${count}</title>
           </rect>
         `;
       }
@@ -150,7 +165,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     trendSvg.innerHTML = svgInnerHtml;
 
-    // 显示首尾与中间日期标签
     trendDates.innerHTML = `
       <span>${days[0]}</span>
       <span>${days[Math.floor(days.length / 2)]}</span>
@@ -158,9 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
   }
 
-  /**
-   * 渲染关键词累计拦截排行榜
-   */
   function renderRanking() {
     const totals = statsData.keywordTotals || {};
     const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
@@ -180,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="rank-item">
           <div class="rank-meta">
             <span class="rank-word">#${idx + 1} ${escapeHtml(word)}</span>
-            <span class="rank-count">${count} 次</span>
+            <span class="rank-count">${count}</span>
           </div>
           <div class="rank-progress-bg">
             <div class="rank-progress-fill" style="width: ${percent}%;"></div>
@@ -192,12 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
     rankList.innerHTML = html;
   }
 
-  /**
-   * 填充并渲染每日明细
-   */
   function renderDailySection() {
     const dates = Object.keys(statsData.dailyStats || {}).sort().reverse();
-
     dateSelect.innerHTML = `<option value="">${window.I18n ? window.I18n.t('selectDate') : '选择日期'}</option>`;
 
     if (dates.length === 0) {
@@ -209,11 +216,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const opt = document.createElement('option');
       opt.value = d;
       const count = statsData.dailyStats[d].total || 0;
-      opt.textContent = `${d} (${count} 次)`;
+      opt.textContent = `${d} (${count})`;
       dateSelect.appendChild(opt);
     });
 
-    // 默认选中最新一天
     const selectedDate = dates[0];
     dateSelect.value = selectedDate;
     renderDailyTable(selectedDate);
@@ -223,9 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  /**
-   * 渲染选定日期的关键词拦截表格
-   */
   function renderDailyTable(dateStr) {
     if (!dateStr || !statsData.dailyStats[dateStr]) {
       dailyTableBody.innerHTML = `<tr><td colspan="3" class="empty-hint">${window.I18n ? window.I18n.t('noStatsData') : '暂无数据'}</td></tr>`;
@@ -257,9 +260,6 @@ document.addEventListener('DOMContentLoaded', () => {
     dailyTableBody.innerHTML = rowsHtml;
   }
 
-  /**
-   * 渲染全部组件
-   */
   function renderAll() {
     renderOverview();
     renderTrendChart();
@@ -267,9 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderDailySection();
   }
 
-  /**
-   * 导出统计数据报表
-   */
   exportBtn.addEventListener('click', () => {
     const today = new Date().toISOString().slice(0, 10);
     const exportPayload = {
@@ -293,11 +290,8 @@ document.addEventListener('DOMContentLoaded', () => {
     URL.revokeObjectURL(blobUrl);
   });
 
-  /**
-   * 清空统计数据
-   */
   clearStatsBtn.addEventListener('click', () => {
-    const confirmMsg = window.I18n ? window.I18n.t('confirmResetStats') : '确定将所有拦截统计重置为 0 吗？';
+    const confirmMsg = window.I18n ? window.I18n.t('confirmResetStats') : '确定清空所有统计数据吗？';
     if (confirm(confirmMsg)) {
       statsData = {
         totalBlocked: 0,
@@ -327,6 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/"/g, '&quot;');
   }
 
-  // 启动
+  themeToggleBtn.addEventListener('click', toggleTheme);
+
+  initTheme();
   setupI18n();
 });

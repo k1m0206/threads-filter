@@ -1,9 +1,12 @@
 /**
- * Threads 关键词过滤助手 - Popup 设置页面交互逻辑
+ * Threads伴侣 (ThreadsFilter) - Popup 设置页面交互逻辑
  */
 
 document.addEventListener('DOMContentLoaded', () => {
   // DOM 元素引用
+  const themeToggleBtn = document.getElementById('themeToggleBtn');
+  const themeIconSun = document.getElementById('themeIconSun');
+  const themeIconMoon = document.getElementById('themeIconMoon');
   const masterToggle = document.getElementById('masterToggle');
   const tradSimpToggle = document.getElementById('tradSimpToggle');
   const langSelect = document.getElementById('langSelect');
@@ -35,25 +38,55 @@ document.addEventListener('DOMContentLoaded', () => {
     logToConsole: true
   };
 
-  /**
-   * 国际化翻译辅助函数
-   */
+  let currentTheme = 'light'; // 默认为浅色主题
+
   function t(key, params) {
     return window.I18n ? window.I18n.t(key, params) : key;
   }
 
-  /**
-   * 显示状态临时提示
-   */
   let statusTimer = null;
   function showStatus(msg, isSuccess = true) {
     if (statusTimer) clearTimeout(statusTimer);
     statusMsg.textContent = msg;
-    statusMsg.style.color = isSuccess ? '#ffffff' : '#ff4d4f';
+    statusMsg.style.color = isSuccess ? 'var(--text-sub)' : 'var(--danger)';
     statusTimer = setTimeout(() => {
-      statusMsg.textContent = t('statusAutoSync');
-      statusMsg.style.color = '#666666';
-    }, 2500);
+      statusMsg.textContent = '';
+    }, 2200);
+  }
+
+  /**
+   * 应用并更新主题
+   */
+  function applyTheme(theme) {
+    currentTheme = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+
+    // 浅色主题显示月亮图标（提示切换到夜间），深色主题显示太阳图标（提示切换到日间）
+    if (currentTheme === 'dark') {
+      themeIconSun.style.display = 'block';
+      themeIconMoon.style.display = 'none';
+    } else {
+      themeIconSun.style.display = 'none';
+      themeIconMoon.style.display = 'block';
+    }
+  }
+
+  function initTheme() {
+    if (chrome.storage && chrome.storage.sync) {
+      chrome.storage.sync.get(['threads_filter_theme'], (res) => {
+        applyTheme(res.threads_filter_theme || 'light');
+      });
+    } else {
+      applyTheme('light');
+    }
+  }
+
+  function toggleTheme() {
+    const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+    applyTheme(nextTheme);
+    if (chrome.storage && chrome.storage.sync) {
+      chrome.storage.sync.set({ threads_filter_theme: nextTheme });
+    }
   }
 
   /**
@@ -63,7 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const keywords = currentConfig.keywords || [];
     keywordCount.textContent = keywords.length;
 
-    // 清空现有标签
     tagsContainer.innerHTML = '';
 
     if (keywords.length === 0) {
@@ -95,9 +127,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /**
-   * 保存配置到 Chrome Storage
-   */
   function saveConfig(callback) {
     if (!chrome.storage || !chrome.storage.sync) return;
     chrome.storage.sync.set({ threads_filter_config: currentConfig }, () => {
@@ -106,13 +135,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /**
-   * 添加关键词
-   */
   function addKeywordsFromInput(text) {
     if (!text || typeof text !== 'string') return;
-
-    // 按中英文逗号、换行、分号、多空格分割
     const tokens = text.split(/[\n,，;；\s]+/).map(t => t.trim()).filter(Boolean);
     if (tokens.length === 0) return;
 
@@ -136,9 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
     keywordInput.focus();
   }
 
-  /**
-   * 删除单个关键词
-   */
   function removeKeyword(index) {
     if (index >= 0 && index < currentConfig.keywords.length) {
       const removed = currentConfig.keywords.splice(index, 1);
@@ -148,9 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /**
-   * 加载拦截统计数据
-   */
   function loadStats() {
     const storageArea = (chrome.storage && chrome.storage.local) ? chrome.storage.local : chrome.storage.sync;
     if (!storageArea) return;
@@ -179,11 +197,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /**
-   * 初始化语言与配置
-   */
   function init() {
-    // 1. 初始化国际化语言
+    initTheme();
+
     if (window.I18n) {
       window.I18n.initLanguage((lang) => {
         langSelect.value = lang;
@@ -210,7 +226,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- 事件绑定 ---
 
-  // 语言快捷切换
+  // 主题切换
+  themeToggleBtn.addEventListener('click', toggleTheme);
+
+  // 语言切换
   langSelect.addEventListener('change', () => {
     if (window.I18n) {
       window.I18n.setLanguage(langSelect.value, () => {
@@ -242,12 +261,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 添加按钮
   addBtn.addEventListener('click', () => {
     addKeywordsFromInput(keywordInput.value);
   });
 
-  // 热门预设词点击
   if (presetTags) {
     presetTags.addEventListener('click', (e) => {
       const pill = e.target.closest('.preset-pill');
@@ -260,7 +277,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 清空全部关键词
   clearAllBtn.addEventListener('click', () => {
     if (currentConfig.keywords.length === 0) return;
     if (confirm(t('confirmClearAll'))) {
@@ -271,7 +287,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 打开批量操作弹层
   batchBtn.addEventListener('click', () => {
     batchTextarea.value = currentConfig.keywords.join('\n');
     batchModal.style.display = 'flex';
@@ -281,7 +296,6 @@ document.addEventListener('DOMContentLoaded', () => {
     batchModal.style.display = 'none';
   });
 
-  // 复制全部关键词
   copyAllBtn.addEventListener('click', () => {
     batchTextarea.select();
     navigator.clipboard.writeText(batchTextarea.value).then(() => {
@@ -289,7 +303,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 保存批量导入
   saveBatchBtn.addEventListener('click', () => {
     const text = batchTextarea.value;
     const tokens = text.split(/[\n,，;；\s]+/).map(t => t.trim()).filter(Boolean);
@@ -301,7 +314,6 @@ document.addEventListener('DOMContentLoaded', () => {
     showStatus(t('batchUpdated', { count: uniqueTokens.length }));
   });
 
-  // 打开详细统计页面
   openStatsPageBtn.addEventListener('click', () => {
     if (chrome.tabs && chrome.tabs.create) {
       chrome.tabs.create({ url: chrome.runtime.getURL('stats/stats.html') });
@@ -310,7 +322,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 重置统计计数
   resetStatBtn.addEventListener('click', () => {
     if (confirm(t('confirmResetStats'))) {
       const resetData = {
@@ -335,7 +346,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 重新扫描当前 Threads 标签页
   rescanBtn.addEventListener('click', () => {
     if (!chrome.tabs) return;
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -355,6 +365,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 启动初始化
   init();
 });
