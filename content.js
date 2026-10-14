@@ -1,6 +1,6 @@
 /**
  * Threads伴侣 (ThreadsFilter) - Content Script
- * 实时过滤 Threads 网页中的用户名、正文及评论区回复，命中即移除
+ * 深度监听并过滤 Threads 网页中的用户名、正文及评论区回复，秒级即时清除
  */
 
 (function () {
@@ -23,7 +23,7 @@
 
   // 节流扫描定时器
   let scanTimer = null;
-  const SCAN_DELAY = 40; // ms
+  const SCAN_DELAY = 30; // ms
 
   // 批量统计写入队列
   let pendingStatsQueue = [];
@@ -37,7 +37,7 @@
     normalizedKeywords = originalKeywords.map(kw => {
       return window.TextNormalizer ? window.TextNormalizer.normalize(kw, filterConfig.convertTradToSimp) : kw.toLowerCase();
     });
-    // 递增规则版本号，失效旧的已检查缓存
+    // 递增规则版本号，失效旧的已检查标记
     currentRuleVersion++;
   }
 
@@ -69,13 +69,16 @@
     });
   }
 
-  // 监听来自 Popup 的重新扫描指令
+  // 监听来自 Popup 的重新扫描指令（添加关键词后立即响应）
   if (chrome.runtime && chrome.runtime.onMessage) {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === 'PING') {
         sendResponse({ status: 'OK' });
       } else if (request.action === 'RESCAN') {
-        currentRuleVersion++;
+        if (request.keywords && Array.isArray(request.keywords)) {
+          filterConfig.keywords = request.keywords;
+        }
+        updateKeywordsCache(filterConfig.keywords);
         performFullScan();
         sendResponse({ status: 'RESCAN_DONE' });
       }
@@ -146,7 +149,7 @@
   }
 
   /**
-   * 核心定位：由任意子节点寻找最近的整条帖子/评论卡片容器
+   * 智能回溯算法：由任意子节点寻找最近的整条帖子/评论卡片容器
    */
   function findPostCardContainer(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
@@ -154,7 +157,6 @@
     // 1. 标准语义标签
     const article = node.closest('article');
     if (article) {
-      // 检查其父级是否是带边框/内边距的单独包装容器
       const parent = article.parentElement;
       if (parent && parent.children.length === 1 && !parent.matches('main, [role="main"], body')) {
         return parent;
@@ -169,21 +171,27 @@
     const roleArticle = node.closest('[role="article"]');
     if (roleArticle) return roleArticle;
 
-    // 3. 自底向上智能回溯：寻找包含作者、互动栏的独立卡片
+    // 3. 自底向上逐层回溯：
     let curr = node;
-    let fallback = null;
+    let bestCandidate = null;
     while (curr && curr !== document.body && curr !== document.documentElement) {
-      if (curr.matches && (curr.matches('article') || curr.matches('[data-pressable-container="true"]'))) {
+      if (curr.matches && (curr.matches('article') || curr.matches('[data-pressable-container="true"]') || curr.matches('[role="article"]'))) {
         return curr;
       }
-      // 如果该容器包含作者链接并且在其父级中是条目之一
-      if (curr.querySelector && curr.querySelector('a[href^="/@"]') && curr.offsetHeight > 50) {
-        fallback = curr;
+
+      // 如果容器包含作者链接或头像并且有明确的高度
+      if (curr.querySelector && (curr.querySelector('a[href^="/@"]') || curr.querySelector('a[role="link"][href*="/@"]')) && curr.offsetHeight > 40) {
+        bestCandidate = curr;
+        // 如果它的父容器包含多个同级项（说明当前 curr 是列表里的独立一条）
+        if (curr.parentElement && curr.parentElement.children.length > 1 && !curr.parentElement.matches('header, nav')) {
+          return curr;
+        }
       }
       curr = curr.parentElement;
     }
 
-    return fallback;
+    // 兜底：如果实在无法识别外层列表，直接返回当前包含文本的容器，确保立即在界面上看到消除效果！
+    return bestCandidate || node;
   }
 
   /**
@@ -191,12 +199,12 @@
    */
   function extractAuthorText(container) {
     const list = [];
-    const authorLinks = container.querySelectorAll('a[href^="/@"]');
+    const authorLinks = container.querySelectorAll('a[href*="/@"]');
     authorLinks.forEach(link => {
       const txt = link.innerText || link.textContent;
       if (txt) list.push(txt.trim());
       const href = link.getAttribute('href') || '';
-      const match = href.match(/^\/@([^/?#]+)/);
+      const match = href.match(/\/@([^/?#]+)/);
       if (match && match[1]) list.push(match[1]);
     });
     return list.join(' ');
@@ -231,12 +239,12 @@
 
     recordBlockStat(keyword);
 
-    // 强力 CSS 压制：保证高度立即归零，彻底不占空间
-    container.style.cssText = 'display: none !important; visibility: hidden !important; height: 0px !important; min-height: 0px !important; max-height: 0px !important; margin: 0px !important; padding: 0px !important; border: none !important; overflow: hidden !important; pointer-events: none !important; opacity: 0 !important;';
+    // 强力 CSS 视觉压制：高度归零、边框归零、溢出隐藏
+    container.style.cssText = 'display: none !important; visibility: hidden !important; height: 0px !important; min-height: 0px !important; max-height: 0px !important; margin: 0px !important; padding: 0px !important; border: none !important; overflow: hidden !important; pointer-events: none !important; opacity: 0 !important; font-size: 0px !important; line-height: 0 !important;';
     container.classList.add('threads-filter-removed');
     container.setAttribute('aria-hidden', 'true');
 
-    // 尝试彻底从 DOM 树移除
+    // 从 DOM 彻底移除
     try {
       if (container.parentNode) {
         container.parentNode.removeChild(container);
@@ -253,7 +261,7 @@
     if (!card || !card.isConnected) return false;
     if (card.dataset.threadsRemoved === 'true') return true;
 
-    // 版本检查：同一版本只检查一次
+    // 同一规则版本号只检查一次，版本递增后立即全量重新检查
     if (card._filterCheckedVersion === currentRuleVersion) {
       return false;
     }
@@ -283,22 +291,15 @@
   }
 
   /**
-   * 全量深度扫描（自顶向下 + 自底向上双保险）
+   * 全量深度扫描（自顶向下 + 穿透式扫描）
    */
   function performFullScan() {
     if (!filterConfig.enabled || normalizedKeywords.length === 0) {
       return;
     }
 
-    // 1. 自顶向下扫描常规卡片
-    const topCards = document.querySelectorAll('article, [data-pressable-container="true"], [role="article"]');
-    topCards.forEach(node => {
-      const card = findPostCardContainer(node);
-      if (card) inspectAndFilterCard(card);
-    });
-
-    // 2. 自底向上扫描所有作者链接（防止改版 class 导致漏检用户名）
-    const authorLinks = document.querySelectorAll('a[href^="/@"]');
+    // 1. 扫描所有作者链接
+    const authorLinks = document.querySelectorAll('a[href*="/@"]');
     authorLinks.forEach(link => {
       const txt = (link.innerText || '') + ' ' + (link.getAttribute('href') || '');
       if (window.TextNormalizer) {
@@ -312,14 +313,24 @@
       }
     });
 
-    // 3. 扫描包含文本的段落/行（对正文与评论进行穿透式扫描）
-    const textNodes = document.querySelectorAll('span[dir="auto"], div[dir="auto"]');
-    textNodes.forEach(node => {
-      const txt = node.innerText || node.textContent;
-      if (txt && txt.length > 1 && window.TextNormalizer) {
+    // 2. 扫描所有常规卡片
+    const topCards = document.querySelectorAll('article, [data-pressable-container="true"], [role="article"]');
+    topCards.forEach(node => {
+      const card = findPostCardContainer(node);
+      if (card) inspectAndFilterCard(card);
+    });
+
+    // 3. 穿透式扫描所有包含文本的元素（段落、正文、评论回复）
+    const textElements = document.querySelectorAll('[dir="auto"], p, span, a[role="link"]');
+    textElements.forEach(el => {
+      // 排除本身已在被移除容器内的元素
+      if (el.closest('.threads-filter-removed') || el.closest('[data-threads-removed="true"]')) return;
+
+      const txt = el.innerText || el.textContent;
+      if (txt && txt.length >= 1 && window.TextNormalizer) {
         const match = window.TextNormalizer.checkMatch(txt, normalizedKeywords, originalKeywords, filterConfig.convertTradToSimp);
         if (match.matched) {
-          const card = findPostCardContainer(node);
+          const card = findPostCardContainer(el);
           if (card) {
             removeCardElement(card, '正文/评论', match.keyword, txt.slice(0, 35) + '...');
           }
@@ -334,7 +345,7 @@
   }
 
   /**
-   * MutationObserver 监听动态内容插入
+   * 动态内容监听
    */
   function initObserver() {
     const observer = new MutationObserver((mutations) => {

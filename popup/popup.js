@@ -118,25 +118,41 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function broadcastRescanToTabs() {
-    if (chrome.tabs && chrome.tabs.query) {
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          if (tab.url && (tab.url.includes('threads.net') || tab.url.includes('threads.com'))) {
-            chrome.tabs.sendMessage(tab.id, { action: 'RESCAN' }, () => {
-              if (chrome.runtime.lastError) {}
-            });
-          }
-        });
+  /**
+   * 立即在当前活动的 Threads 标签页强制执行过滤（零延迟立竿见影）
+   */
+  function triggerImmediatePageFilter() {
+    if (!chrome.tabs || !chrome.tabs.query) return;
+
+    chrome.tabs.query({}, (tabs) => {
+      if (!tabs) return;
+      tabs.forEach(tab => {
+        if (tab.url && (tab.url.includes('threads.net') || tab.url.includes('threads.com'))) {
+          // 1. 发送 RESCAN 消息携带最新关键词列表
+          chrome.tabs.sendMessage(tab.id, { action: 'RESCAN', keywords: currentConfig.keywords }, (res) => {
+            // 2. 如果通信失败（说明此标签页是在扩展重载前打开的，尚未注入最新脚本），直接通过 scripting 动态注入！
+            if (chrome.runtime.lastError || !res) {
+              if (chrome.scripting && chrome.scripting.executeScript) {
+                chrome.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  files: ['utils/text-normalizer.js', 'content.js']
+                }).then(() => {
+                  chrome.tabs.sendMessage(tab.id, { action: 'RESCAN', keywords: currentConfig.keywords });
+                }).catch(() => {});
+              }
+            }
+          });
+        }
       });
-    }
+    });
   }
 
   function saveConfig(callback) {
     if (!chrome.storage || !chrome.storage.sync) return;
     chrome.storage.sync.set({ threads_filter_config: currentConfig }, () => {
       showStatus(t('statusSaved'));
-      broadcastRescanToTabs();
+      // 关键：立即触发活动标签页毫秒级刷新过滤
+      triggerImmediatePageFilter();
       if (typeof callback === 'function') callback();
     });
   }
@@ -335,22 +351,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   rescanBtn.addEventListener('click', () => {
-    if (!chrome.tabs) return;
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (!tabs || tabs.length === 0) return;
-      const activeTab = tabs[0];
-      if (activeTab.url && (activeTab.url.includes('threads.net') || activeTab.url.includes('threads.com'))) {
-        chrome.tabs.sendMessage(activeTab.id, { action: 'RESCAN' }, (response) => {
-          if (chrome.runtime.lastError) {
-            showStatus(t('statusRescanFail'));
-          } else {
-            showStatus(t('statusRescanSuccess'));
-          }
-        });
-      } else {
-        showStatus(t('statusNotThreads'));
-      }
-    });
+    triggerImmediatePageFilter();
+    showStatus(t('statusRescanSuccess'));
   });
 
   init();

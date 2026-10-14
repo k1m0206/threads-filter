@@ -208,6 +208,8 @@
     }
 
     const normText = normalizeText(rawText, convertTradToSimp);
+    // 去除常见干扰符号与空格的紧凑比对串
+    const compactText = normText.replace(/[\s\-_—·.,，。、!！？?~～@#$%\^&*+=]+/g, '');
 
     for (let i = 0; i < normalizedKeywords.length; i++) {
       const kw = normalizedKeywords[i];
@@ -218,6 +220,17 @@
           matched: true,
           keyword: originalKeywords[i] || kw
         };
+      }
+
+      // 对2字及以上关键词尝试去除干扰符号比对（防故意插空格防过滤）
+      if (kw.length >= 2) {
+        const compactKw = kw.replace(/[\s\-_—·.,，。、!！？?~～@#$%\^&*+=]+/g, '');
+        if (compactKw && compactKw.length >= 2 && compactText.includes(compactKw)) {
+          return {
+            matched: true,
+            keyword: originalKeywords[i] || kw
+          };
+        }
       }
     }
 

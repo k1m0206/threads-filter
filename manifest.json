@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "description": "ThreadsFilter - Threads 网页版关键词过滤伴侣，支持用户名、正文及评论区过滤，支持多语言与简繁互通，自由切换深浅色主题。",
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab",
+    "scripting"
   ],
   "host_permissions": [
     "*://*.threads.net/*",
