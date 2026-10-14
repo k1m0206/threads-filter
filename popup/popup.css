@@ -53,7 +53,7 @@
 }
 
 body {
-  width: 360px;
+  width: 350px;
   background-color: var(--bg-color);
   color: var(--text-main);
   font-family: var(--font-family);
@@ -83,7 +83,7 @@ body {
   gap: 8px;
 }
 
-.icon-threads {
+.brand-icon {
   color: var(--text-main);
 }
 
@@ -218,31 +218,6 @@ input:checked + .slider:before {
   transform: translateX(16px);
 }
 
-/* 过滤范围微型胶囊徽章（纯 SVG 线条，无 emoji） */
-.scope-badges {
-  display: flex;
-  gap: 8px;
-}
-
-.badge {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  padding: 5px 8px;
-  background: var(--card-bg);
-  color: var(--text-sub);
-  border-radius: 8px;
-  border: 1px solid var(--card-border);
-}
-
-.badge-icon {
-  stroke: currentColor;
-}
-
 /* 输入区域 */
 .input-section {
   display: flex;
@@ -316,39 +291,6 @@ button {
   border-color: var(--text-muted);
 }
 
-/* 预设推荐区 */
-.preset-section {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.preset-title {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.preset-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.preset-pill {
-  font-size: 11px;
-  color: var(--text-sub);
-  background-color: var(--card-bg);
-  border: 1px dashed var(--card-border);
-  border-radius: 9999px;
-  padding: 2px 8px;
-}
-
-.preset-pill:hover {
-  color: var(--text-main);
-  border-color: var(--text-sub);
-}
-
 /* 关键词列表卡片 */
 .list-section {
   background-color: var(--card-bg);
@@ -398,7 +340,7 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-height: 130px;
+  max-height: 140px;
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -414,7 +356,7 @@ button {
 .empty-state {
   width: 100%;
   text-align: center;
-  padding: 16px 0;
+  padding: 18px 0;
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -427,7 +369,7 @@ button {
   background-color: var(--tag-bg);
   border: 1px solid var(--tag-border);
   border-radius: 9999px;
-  padding: 3px 10px;
+  padding: 4px 10px;
   font-size: 12px;
   color: var(--text-main);
   transition: all 0.15s ease;

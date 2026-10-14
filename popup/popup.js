@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const langSelect = document.getElementById('langSelect');
   const keywordInput = document.getElementById('keywordInput');
   const addBtn = document.getElementById('addBtn');
-  const presetTags = document.getElementById('presetTags');
   const tagsContainer = document.getElementById('tagsContainer');
   const emptyState = document.getElementById('emptyState');
   const keywordCount = document.getElementById('keywordCount');
@@ -30,7 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const rescanBtn = document.getElementById('rescanBtn');
   const statusMsg = document.getElementById('statusMsg');
 
-  // 本地配置状态
   let currentConfig = {
     enabled: true,
     keywords: [],
@@ -38,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     logToConsole: true
   };
 
-  let currentTheme = 'light'; // 默认为浅色主题
+  let currentTheme = 'light';
 
   function t(key, params) {
     return window.I18n ? window.I18n.t(key, params) : key;
@@ -54,14 +52,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 2200);
   }
 
-  /**
-   * 应用并更新主题
-   */
   function applyTheme(theme) {
     currentTheme = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', currentTheme);
 
-    // 浅色主题显示月亮图标（提示切换到夜间），深色主题显示太阳图标（提示切换到日间）
     if (currentTheme === 'dark') {
       themeIconSun.style.display = 'block';
       themeIconMoon.style.display = 'none';
@@ -89,9 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /**
-   * 渲染关键词标签列表
-   */
   function renderKeywords() {
     const keywords = currentConfig.keywords || [];
     keywordCount.textContent = keywords.length;
@@ -224,12 +215,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStats();
   }
 
-  // --- 事件绑定 ---
-
-  // 主题切换
+  // 事件绑定
   themeToggleBtn.addEventListener('click', toggleTheme);
 
-  // 语言切换
   langSelect.addEventListener('change', () => {
     if (window.I18n) {
       window.I18n.setLanguage(langSelect.value, () => {
@@ -239,21 +227,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 总开关
   masterToggle.addEventListener('change', () => {
     currentConfig.enabled = masterToggle.checked;
     saveConfig();
     showStatus(masterToggle.checked ? t('statusEnabled') : t('statusDisabled'));
   });
 
-  // 简繁互通开关
   tradSimpToggle.addEventListener('change', () => {
     currentConfig.convertTradToSimp = tradSimpToggle.checked;
     saveConfig();
     showStatus(tradSimpToggle.checked ? t('statusTradSimpOn') : t('statusTradSimpOff'));
   });
 
-  // 输入框 Enter 键添加
   keywordInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -264,18 +249,6 @@ document.addEventListener('DOMContentLoaded', () => {
   addBtn.addEventListener('click', () => {
     addKeywordsFromInput(keywordInput.value);
   });
-
-  if (presetTags) {
-    presetTags.addEventListener('click', (e) => {
-      const pill = e.target.closest('.preset-pill');
-      if (pill) {
-        const word = pill.dataset.word || pill.textContent;
-        if (word) {
-          addKeywordsFromInput(word);
-        }
-      }
-    });
-  }
 
   clearAllBtn.addEventListener('click', () => {
     if (currentConfig.keywords.length === 0) return;
