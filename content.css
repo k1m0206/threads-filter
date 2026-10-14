@@ -1,0 +1,12 @@
+/* 辅助隐藏被过滤的帖子，防止移除过程中可能发生的瞬间闪烁 */
+.threads-filter-removed {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}

@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Threads 关键词过滤助手",
+  "version": "1.0.0",
+  "description": "Threads 网页版关键词过滤插件：支持按关键词屏蔽用户名、帖子正文及评论区回复，支持简繁中文互通、英日韩语多语言，直接从页面中移除被命中内容。",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.threads.net/*",
+    "*://*.threads.com/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Threads 过滤设置",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.threads.net/*",
+        "*://*.threads.com/*"
+      ],
+      "js": [
+        "utils/text-normalizer.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

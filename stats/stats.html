@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="statsPageTitle">Threads 过滤助手 - 统计中心</title>
+  <link rel="stylesheet" href="stats.css">
+</head>
+<body>
+  <div class="stats-container">
+    <!-- 头部导航 -->
+    <header class="header">
+      <div class="header-left">
+        <svg class="threads-icon" viewBox="0 0 192 192" width="28" height="28">
+          <circle cx="96" cy="96" r="88" fill="none" stroke="currentColor" stroke-width="12"/>
+          <path d="M136 96c0-23-16-40-40-40s-40 17-40 40 16 40 40 40c14 0 26-7 33-18l-14-9c-4 7-11 11-19 11-13 0-23-9-24-21h62c1-4 2-8 2-13zm-64-5c1-11 10-19 24-19s22 8 23 19H72z" fill="currentColor"/>
+        </svg>
+        <div>
+          <h1 class="header-title" data-i18n="statsHeaderTitle">过滤数据统计中心</h1>
+          <p class="header-sub" data-i18n="statsHeaderSub">详细记录每日拦截趋势与关键词分布</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <!-- 语言选择 -->
+        <div class="lang-select-wrapper">
+          <label for="langSelect" class="lang-label" data-i18n="languageLabel">界面语言</label>
+          <select id="langSelect" class="select-dropdown">
+            <option value="zh-CN">简体中文</option>
+            <option value="zh-TW">繁體中文</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+          </select>
+        </div>
+        <button id="exportBtn" class="btn-secondary" data-i18n="btnExportStats">导出报表</button>
+        <button id="clearStatsBtn" class="btn-danger" data-i18n="btnClearStats">清空统计</button>
+      </div>
+    </header>
+
+    <!-- 数据总览卡片 -->
+    <section class="overview-section">
+      <div class="card stat-card">
+        <span class="card-label" data-i18n="statCardTotal">累计总拦截</span>
+        <span class="card-value" id="valTotalBlocked">0</span>
+      </div>
+      <div class="card stat-card">
+        <span class="card-label" data-i18n="statCardToday">今日拦截</span>
+        <span class="card-value" id="valTodayBlocked">0</span>
+      </div>
+      <div class="card stat-card">
+        <span class="card-label" data-i18n="statCardKeywords">已生效屏蔽词</span>
+        <span class="card-value" id="valActiveKeywords">0</span>
+      </div>
+      <div class="card stat-card">
+        <span class="card-label" data-i18n="statCardMaxDay">单日最高拦截</span>
+        <span class="card-value" id="valMaxDayBlocked">0</span>
+      </div>
+    </section>
+
+    <!-- 近 14 天趋势图卡片 -->
+    <section class="card chart-section">
+      <div class="section-header">
+        <h2 class="section-title" data-i18n="statsTrendTitle">近 14 天过滤趋势</h2>
+      </div>
+      <div class="chart-wrapper" id="trendChartWrapper">
+        <!-- 由 JavaScript 生成的 SVG 柱状图 -->
+        <svg id="trendSvg" class="trend-svg" viewBox="0 0 760 180" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="chart-dates" id="trendDates"></div>
+    </section>
+
+    <!-- 下方两栏：左侧关键词排行榜，右侧每日明细 -->
+    <div class="two-column-layout">
+      <!-- 关键词排行榜 -->
+      <section class="card rank-section">
+        <div class="section-header">
+          <h2 class="section-title" data-i18n="statsRankTitle">关键词累计拦截排行 (TOP 10)</h2>
+        </div>
+        <div class="rank-list" id="rankList">
+          <div class="empty-hint" data-i18n="noStatsData">暂无拦截统计数据</div>
+        </div>
+      </section>
+
+      <!-- 按日明细查询 -->
+      <section class="card daily-section">
+        <div class="section-header space-between">
+          <h2 class="section-title" data-i18n="statsDailyDetailTitle">按日明细查询</h2>
+          <select id="dateSelect" class="select-dropdown">
+            <option value="" data-i18n="selectDate">选择日期</option>
+          </select>
+        </div>
+        <div class="daily-table-wrapper">
+          <table class="daily-table">
+            <thead>
+              <tr>
+                <th data-i18n="thKeyword">关键词</th>
+                <th data-i18n="thCount">命中次数</th>
+                <th data-i18n="thPercentage">占比</th>
+              </tr>
+            </thead>
+            <tbody id="dailyTableBody">
+              <tr>
+                <td colspan="3" class="empty-hint" data-i18n="noStatsData">暂无数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="../utils/i18n.js"></script>
+  <script src="stats.js"></script>
+</body>
+</html>

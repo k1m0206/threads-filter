@@ -1,0 +1,320 @@
+/* Threads 风格统计仪表盘样式 */
+:root {
+  --bg-color: #101010;
+  --card-bg: #181818;
+  --card-border: #282828;
+  --text-main: #f3f5f7;
+  --text-muted: #777777;
+  --text-sub: #999999;
+  --accent: #ffffff;
+  --accent-hover: #e0e0e0;
+  --danger: #ff4d4f;
+  --danger-hover: #ff7875;
+  --bar-bg: #2a2a2a;
+  --bar-fill: #ffffff;
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  padding: 32px 20px;
+}
+
+.stats-container {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 头部导航 */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.threads-icon {
+  color: var(--accent);
+}
+
+.header-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.header-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lang-select-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lang-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.select-dropdown {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.select-dropdown:focus {
+  border-color: #666666;
+}
+
+/* 按钮通用 */
+button {
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 9999px;
+  padding: 7px 14px;
+  border: none;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary {
+  background-color: #222222;
+  color: #ffffff;
+  border: 1px solid #333333;
+}
+
+.btn-secondary:hover {
+  background-color: #2d2d2d;
+  border-color: #555555;
+}
+
+.btn-danger {
+  background-color: transparent;
+  color: var(--danger);
+  border: 1px solid #442222;
+}
+
+.btn-danger:hover {
+  background-color: rgba(255, 77, 79, 0.1);
+  border-color: var(--danger);
+}
+
+/* 通用卡片容器 */
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.section-header {
+  margin-bottom: 16px;
+}
+
+.section-header.space-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* 数据总览卡片网格 */
+.overview-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.card-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.5px;
+}
+
+/* 趋势图表区 */
+.chart-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-wrapper {
+  width: 100%;
+  height: 180px;
+  position: relative;
+}
+
+.trend-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.trend-bar {
+  fill: #ffffff;
+  transition: fill 0.2s, transform 0.2s;
+  cursor: pointer;
+  rx: 3;
+}
+
+.trend-bar:hover {
+  fill: #cccccc;
+}
+
+.trend-bg-bar {
+  fill: #222222;
+  rx: 3;
+}
+
+.chart-dates {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 10px;
+}
+
+/* 下方两栏布局 */
+.two-column-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .two-column-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 关键词排行榜 */
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rank-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rank-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.rank-word {
+  font-weight: 600;
+}
+
+.rank-count {
+  color: var(--text-muted);
+}
+
+.rank-progress-bg {
+  width: 100%;
+  height: 6px;
+  background-color: var(--bar-bg);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.rank-progress-fill {
+  height: 100%;
+  background-color: var(--bar-fill);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+/* 每日明细表格 */
+.daily-table-wrapper {
+  overflow-x: auto;
+  max-height: 280px;
+}
+
+.daily-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.daily-table th, .daily-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #222222;
+}
+
+.daily-table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 12px;
+  position: sticky;
+  top: 0;
+  background-color: var(--card-bg);
+}
+
+.empty-hint {
+  text-align: center;
+  padding: 24px 0;
+  color: #555555;
+  font-size: 13px;
+}

@@ -1,0 +1,19 @@
+{
+  "name": "threads-keyword-blocker",
+  "version": "1.0.0",
+  "description": "Threads 网页版关键词过滤插件（支持用户名、正文、评论过滤，多语言与简繁互通，黑白极简风格）",
+  "scripts": {
+    "build": "node scripts/package.js",
+    "package": "node scripts/package.js"
+  },
+  "keywords": [
+    "threads",
+    "filter",
+    "blocker",
+    "chrome-extension",
+    "firefox-addon",
+    "i18n"
+  ],
+  "author": "",
+  "license": "MIT"
+}
