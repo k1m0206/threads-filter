@@ -118,10 +118,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function broadcastRescanToTabs() {
+    if (chrome.tabs && chrome.tabs.query) {
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          if (tab.url && (tab.url.includes('threads.net') || tab.url.includes('threads.com'))) {
+            chrome.tabs.sendMessage(tab.id, { action: 'RESCAN' }, () => {
+              if (chrome.runtime.lastError) {}
+            });
+          }
+        });
+      });
+    }
+  }
+
   function saveConfig(callback) {
     if (!chrome.storage || !chrome.storage.sync) return;
     chrome.storage.sync.set({ threads_filter_config: currentConfig }, () => {
       showStatus(t('statusSaved'));
+      broadcastRescanToTabs();
       if (typeof callback === 'function') callback();
     });
   }

@@ -1,12 +1,12 @@
 /**
- * Threads 关键词过滤助手 - Content Script
- * 负责监听 Threads 网页中的帖子与评论，并实时过滤含有关键词的用户名、正文及评论
+ * Threads伴侣 (ThreadsFilter) - Content Script
+ * 实时过滤 Threads 网页中的用户名、正文及评论区回复，命中即移除
  */
 
 (function () {
   'use strict';
 
-  // 默认配置
+  // 运行配置
   let filterConfig = {
     enabled: true,
     keywords: [],
@@ -14,36 +14,35 @@
     logToConsole: true
   };
 
-  // 预编译后的规范化关键词列表
+  // 规范化后的关键词缓存
   let normalizedKeywords = [];
   let originalKeywords = [];
 
-  // 节流定时器
+  // 规则版本号：每当配置更新或关键词变动时自增，确保所有内容立即重新检测
+  let currentRuleVersion = 1;
+
+  // 节流扫描定时器
   let scanTimer = null;
-  const SCAN_DELAY = 60; // ms
+  const SCAN_DELAY = 40; // ms
 
-  // 已检查过的干净节点记录（使用 WeakSet 避免内存泄漏）
-  const cleanElements = new WeakSet();
-
-  // 排除的常见系统控制词，防止误判
-  const SYSTEM_IGNORE_WORDS = new Set([
-    'threads', 'like', 'reply', 'repost', 'share', 'follow', 'following',
-    '喜欢', '回复', '转帖', '转推', '分享', '关注', '追踪', '正在追踪',
-    '返信', 'リポスト', 'いいね', '共有', 'フォロー中', '팔로우'
-  ]);
+  // 批量统计写入队列
+  let pendingStatsQueue = [];
+  let statsFlushTimer = null;
 
   /**
-   * 更新关键词列表与规范化缓存
+   * 刷新关键词缓存
    */
   function updateKeywordsCache(rawKeywords) {
     originalKeywords = Array.isArray(rawKeywords) ? rawKeywords.map(k => String(k).trim()).filter(Boolean) : [];
     normalizedKeywords = originalKeywords.map(kw => {
       return window.TextNormalizer ? window.TextNormalizer.normalize(kw, filterConfig.convertTradToSimp) : kw.toLowerCase();
     });
+    // 递增规则版本号，失效旧的已检查缓存
+    currentRuleVersion++;
   }
 
   /**
-   * 从 storage 加载配置
+   * 加载配置
    */
   function loadSettings() {
     if (!chrome.storage || !chrome.storage.sync) return;
@@ -52,14 +51,11 @@
         filterConfig = Object.assign(filterConfig, result.threads_filter_config);
       }
       updateKeywordsCache(filterConfig.keywords);
-      // 重新扫描页面
-      triggerFullScan();
+      performFullScan();
     });
   }
 
-  /**
-   * 监听存储变动（当用户在 Popup 中修改屏蔽词或开关时）
-   */
+  // 监听 storage 变动（Popup 修改即刻生效）
   if (chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName === 'sync' && changes.threads_filter_config) {
@@ -67,30 +63,27 @@
         if (newVal) {
           filterConfig = Object.assign(filterConfig, newVal);
           updateKeywordsCache(filterConfig.keywords);
-          triggerFullScan();
+          performFullScan();
         }
       }
     });
   }
 
-  // 监听来自 popup 的即时指令
+  // 监听来自 Popup 的重新扫描指令
   if (chrome.runtime && chrome.runtime.onMessage) {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === 'PING') {
         sendResponse({ status: 'OK' });
       } else if (request.action === 'RESCAN') {
-        triggerFullScan();
+        currentRuleVersion++;
+        performFullScan();
         sendResponse({ status: 'RESCAN_DONE' });
       }
     });
   }
 
-  // 批量统计队列，避免高频写入 storage
-  let pendingStatsQueue = [];
-  let statsFlushTimer = null;
-
   /**
-   * 将统计增量刷新写入 chrome.storage.local
+   * 刷新统计数据写入
    */
   function flushStats() {
     if (pendingStatsQueue.length === 0) return;
@@ -125,16 +118,14 @@
           stats.keywordTotals[word] = (stats.keywordTotals[word] || 0) + 1;
         });
 
-        // 仅保留最近 90 天的数据，避免历史堆积过大
+        // 仅保留最近 90 天
         const dates = Object.keys(stats.dailyStats).sort();
         if (dates.length > 90) {
-          const toRemove = dates.slice(0, dates.length - 90);
-          toRemove.forEach(d => delete stats.dailyStats[d]);
+          dates.slice(0, dates.length - 90).forEach(d => delete stats.dailyStats[d]);
         }
 
         storageArea.set({ threads_filter_stats: stats });
 
-        // 同时更新 sync 中的简略计数，便于 popup 极速读取
         if (chrome.storage && chrome.storage.sync) {
           chrome.storage.sync.set({
             threads_filter_stats_summary: {
@@ -145,31 +136,25 @@
           });
         }
       });
-    } catch (e) {
-      // 容错处理
-    }
+    } catch (e) {}
   }
 
-  /**
-   * 记录拦截计数并加入队列
-   */
   function recordBlockStat(matchedKeyword) {
     pendingStatsQueue.push(matchedKeyword);
     if (statsFlushTimer) clearTimeout(statsFlushTimer);
-    statsFlushTimer = setTimeout(flushStats, 400);
+    statsFlushTimer = setTimeout(flushStats, 300);
   }
 
   /**
-   * 定位一条帖子或评论的完整容器卡片
-   * Threads 网页端的卡片主要为 <article> 或 [data-pressable-container="true"]
+   * 核心定位：由任意子节点寻找最近的整条帖子/评论卡片容器
    */
-  function findPostContainer(node) {
+  function findPostCardContainer(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
 
-    // 1. 最标准的文章/评论元素
+    // 1. 标准语义标签
     const article = node.closest('article');
     if (article) {
-      // 检查其父级是否是单项包裹容器（包含边框、分割线等）
+      // 检查其父级是否是带边框/内边距的单独包装容器
       const parent = article.parentElement;
       if (parent && parent.children.length === 1 && !parent.matches('main, [role="main"], body')) {
         return parent;
@@ -177,189 +162,198 @@
       return article;
     }
 
-    // 2. 备用定位方式：基于 data-pressable-container
+    // 2. 基于属性容器
     const pressable = node.closest('[data-pressable-container="true"]');
-    if (pressable) {
-      return pressable;
-    }
+    if (pressable) return pressable;
 
-    // 3. 基于 role="article"
     const roleArticle = node.closest('[role="article"]');
-    if (roleArticle) {
-      return roleArticle;
+    if (roleArticle) return roleArticle;
+
+    // 3. 自底向上智能回溯：寻找包含作者、互动栏的独立卡片
+    let curr = node;
+    let fallback = null;
+    while (curr && curr !== document.body && curr !== document.documentElement) {
+      if (curr.matches && (curr.matches('article') || curr.matches('[data-pressable-container="true"]'))) {
+        return curr;
+      }
+      // 如果该容器包含作者链接并且在其父级中是条目之一
+      if (curr.querySelector && curr.querySelector('a[href^="/@"]') && curr.offsetHeight > 50) {
+        fallback = curr;
+      }
+      curr = curr.parentElement;
     }
 
-    return null;
+    return fallback;
   }
 
   /**
-   * 提取帖子中的发帖人用户名/昵称
+   * 提取发帖人用户名/Handle
    */
-  function extractAuthorInfo(container) {
-    let authorTexts = [];
-
-    // Threads 中的用户名通常带有 href 开头为 /@ 的链接
+  function extractAuthorText(container) {
+    const list = [];
     const authorLinks = container.querySelectorAll('a[href^="/@"]');
     authorLinks.forEach(link => {
-      const text = link.innerText || link.textContent;
-      if (text) authorTexts.push(text.trim());
-      // 取出 href 中的用户名，如 /@username -> username
+      const txt = link.innerText || link.textContent;
+      if (txt) list.push(txt.trim());
       const href = link.getAttribute('href') || '';
       const match = href.match(/^\/@([^/?#]+)/);
-      if (match && match[1]) {
-        authorTexts.push(match[1]);
-      }
+      if (match && match[1]) list.push(match[1]);
     });
-
-    return authorTexts.join(' ');
+    return list.join(' ');
   }
 
   /**
-   * 提取帖子正文与评论内容
+   * 提取正文和评论文本（排除按钮文字等）
    */
   function extractContentText(container) {
-    // 拷贝文本并去除明显的按钮文字
     const clone = container.cloneNode(true);
-
-    // 移除常见的操作按钮区域（点赞、转发、分享等），避免系统文字干扰
-    const buttons = clone.querySelectorAll('button, [role="button"], svg, time');
-    buttons.forEach(btn => btn.remove());
-
+    clone.querySelectorAll('button, [role="button"], svg, time').forEach(el => el.remove());
     return clone.innerText || clone.textContent || '';
   }
 
   /**
-   * 检查并过滤单个帖子或评论容器
+   * 移除并彻底隐藏目标卡片
    */
-  function checkAndFilterItem(container) {
-    if (!container || !container.isConnected) return false;
-    if (cleanElements.has(container)) return false;
-    if (container.dataset.threadsFiltered === 'done') return false;
+  function removeCardElement(container, reasonType, keyword, snippet) {
+    if (!container || !container.isConnected) return;
+    if (container.dataset.threadsRemoved === 'true') return;
 
-    // 1. 检查发帖人/评论人用户名
-    const authorText = extractAuthorInfo(container);
+    container.dataset.threadsRemoved = 'true';
+
+    if (filterConfig.logToConsole) {
+      console.log(
+        `%c[Threads伴侣]%c 已移除包含关键词【${keyword}】的内容 (${reasonType}):`,
+        'background: #000; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold;',
+        'color: #ff4757; font-weight: bold;',
+        snippet || ''
+      );
+    }
+
+    recordBlockStat(keyword);
+
+    // 强力 CSS 压制：保证高度立即归零，彻底不占空间
+    container.style.cssText = 'display: none !important; visibility: hidden !important; height: 0px !important; min-height: 0px !important; max-height: 0px !important; margin: 0px !important; padding: 0px !important; border: none !important; overflow: hidden !important; pointer-events: none !important; opacity: 0 !important;';
+    container.classList.add('threads-filter-removed');
+    container.setAttribute('aria-hidden', 'true');
+
+    // 尝试彻底从 DOM 树移除
+    try {
+      if (container.parentNode) {
+        container.parentNode.removeChild(container);
+      } else {
+        container.remove();
+      }
+    } catch (e) {}
+  }
+
+  /**
+   * 检查单个卡片容器
+   */
+  function inspectAndFilterCard(card) {
+    if (!card || !card.isConnected) return false;
+    if (card.dataset.threadsRemoved === 'true') return true;
+
+    // 版本检查：同一版本只检查一次
+    if (card._filterCheckedVersion === currentRuleVersion) {
+      return false;
+    }
+
+    // 1. 检查用户名 / Handle
+    const authorText = extractAuthorText(card);
     if (authorText && window.TextNormalizer) {
       const match = window.TextNormalizer.checkMatch(authorText, normalizedKeywords, originalKeywords, filterConfig.convertTradToSimp);
       if (match.matched) {
-        removeItem(container, '用户名', match.keyword, authorText);
+        removeCardElement(card, '用户名', match.keyword, authorText);
         return true;
       }
     }
 
-    // 2. 检查正文及评论区文本
-    const contentText = extractContentText(container);
+    // 2. 检查正文及评论内容
+    const contentText = extractContentText(card);
     if (contentText && window.TextNormalizer) {
       const match = window.TextNormalizer.checkMatch(contentText, normalizedKeywords, originalKeywords, filterConfig.convertTradToSimp);
       if (match.matched) {
-        removeItem(container, '正文/评论', match.keyword, contentText.slice(0, 40) + '...');
+        removeCardElement(card, '正文/评论', match.keyword, contentText.slice(0, 35) + '...');
         return true;
       }
     }
 
-    // 未命中任何关键词，标记为干净
-    cleanElements.add(container);
+    card._filterCheckedVersion = currentRuleVersion;
     return false;
   }
 
   /**
-   * 从页面中移除命中的元素
+   * 全量深度扫描（自顶向下 + 自底向上双保险）
    */
-  function removeItem(element, type, keyword, snippet) {
-    element.dataset.threadsFiltered = 'done';
-
-    if (filterConfig.logToConsole) {
-      console.log(
-        `%c[Threads 过滤]%c 已移除包含关键词【${keyword}】的内容 (${type}):`,
-        'background: #000; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold;',
-        'color: #ff4757; font-weight: bold;',
-        snippet
-      );
-    }
-
-    // 记录统计
-    recordBlockStat(keyword);
-
-    // 隐藏并从 DOM 中移除，保证页面整洁
-    element.style.display = 'none';
-    element.style.pointerEvents = 'none';
-    element.classList.add('threads-filter-removed');
-
-    // 异步彻底从 DOM 中安全删除
-    try {
-      if (element.parentNode) {
-        element.parentNode.removeChild(element);
-      } else {
-        element.remove();
-      }
-    } catch (e) {
-      // 容错处理
-    }
-  }
-
-  /**
-   * 执行全量/增量页面扫描
-   */
-  function performScan() {
+  function performFullScan() {
     if (!filterConfig.enabled || normalizedKeywords.length === 0) {
       return;
     }
 
-    // 查询所有可能的帖子与评论容器
-    const candidateNodes = document.querySelectorAll('article, [data-pressable-container="true"], [role="article"]');
-    candidateNodes.forEach(node => {
-      const postCard = findPostContainer(node);
-      if (postCard) {
-        checkAndFilterItem(postCard);
+    // 1. 自顶向下扫描常规卡片
+    const topCards = document.querySelectorAll('article, [data-pressable-container="true"], [role="article"]');
+    topCards.forEach(node => {
+      const card = findPostCardContainer(node);
+      if (card) inspectAndFilterCard(card);
+    });
+
+    // 2. 自底向上扫描所有作者链接（防止改版 class 导致漏检用户名）
+    const authorLinks = document.querySelectorAll('a[href^="/@"]');
+    authorLinks.forEach(link => {
+      const txt = (link.innerText || '') + ' ' + (link.getAttribute('href') || '');
+      if (window.TextNormalizer) {
+        const match = window.TextNormalizer.checkMatch(txt, normalizedKeywords, originalKeywords, filterConfig.convertTradToSimp);
+        if (match.matched) {
+          const card = findPostCardContainer(link);
+          if (card) {
+            removeCardElement(card, '用户名', match.keyword, txt);
+          }
+        }
+      }
+    });
+
+    // 3. 扫描包含文本的段落/行（对正文与评论进行穿透式扫描）
+    const textNodes = document.querySelectorAll('span[dir="auto"], div[dir="auto"]');
+    textNodes.forEach(node => {
+      const txt = node.innerText || node.textContent;
+      if (txt && txt.length > 1 && window.TextNormalizer) {
+        const match = window.TextNormalizer.checkMatch(txt, normalizedKeywords, originalKeywords, filterConfig.convertTradToSimp);
+        if (match.matched) {
+          const card = findPostCardContainer(node);
+          if (card) {
+            removeCardElement(card, '正文/评论', match.keyword, txt.slice(0, 35) + '...');
+          }
+        }
       }
     });
   }
 
-  /**
-   * 触发防抖扫描
-   */
   function scheduleScan() {
     if (scanTimer) clearTimeout(scanTimer);
-    scanTimer = setTimeout(() => {
-      performScan();
-    }, SCAN_DELAY);
+    scanTimer = setTimeout(performFullScan, SCAN_DELAY);
   }
 
   /**
-   * 触发全量重新扫描（清除缓存状态）
-   */
-  function triggerFullScan() {
-    // 重新扫描时，如果插件停用，则不执行
-    if (!filterConfig.enabled || normalizedKeywords.length === 0) {
-      return;
-    }
-    performScan();
-  }
-
-  /**
-   * 使用 MutationObserver 监听 Threads 动态内容加载
+   * MutationObserver 监听动态内容插入
    */
   function initObserver() {
     const observer = new MutationObserver((mutations) => {
-      let shouldScan = false;
+      let needsScan = false;
       for (let i = 0; i < mutations.length; i++) {
-        const mutation = mutations[i];
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          for (let j = 0; j < mutation.addedNodes.length; j++) {
-            const addedNode = mutation.addedNodes[j];
-            if (addedNode.nodeType === Node.ELEMENT_NODE) {
-              // 忽略我们自己注入的样式或脚本
-              if (addedNode.classList && addedNode.classList.contains('threads-filter-removed')) {
-                continue;
-              }
-              shouldScan = true;
+        const m = mutations[i];
+        if (m.addedNodes.length > 0) {
+          for (let j = 0; j < m.addedNodes.length; j++) {
+            const node = m.addedNodes[j];
+            if (node.nodeType === Node.ELEMENT_NODE && !node.classList.contains('threads-filter-removed')) {
+              needsScan = true;
               break;
             }
           }
         }
-        if (shouldScan) break;
+        if (needsScan) break;
       }
 
-      if (shouldScan) {
+      if (needsScan) {
         scheduleScan();
       }
     });
@@ -370,7 +364,6 @@
     });
   }
 
-  // 初始化入口
   function init() {
     loadSettings();
     if (document.body) {

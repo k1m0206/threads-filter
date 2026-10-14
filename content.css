@@ -1,12 +1,17 @@
-/* 辅助隐藏被过滤的帖子，防止移除过程中可能发生的瞬间闪烁 */
-.threads-filter-removed {
+/* 辅助隐藏被过滤的帖子与评论，确保绝对无残留高度和边框 */
+.threads-filter-removed,
+[data-threads-removed="true"] {
   display: none !important;
   visibility: hidden !important;
-  height: 0 !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
+  height: 0px !important;
+  min-height: 0px !important;
+  max-height: 0px !important;
+  margin: 0px !important;
+  padding: 0px !important;
   border: none !important;
   overflow: hidden !important;
+  opacity: 0 !important;
+  font-size: 0px !important;
+  line-height: 0 !important;
   pointer-events: none !important;
 }
