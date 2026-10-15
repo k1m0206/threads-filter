@@ -69,7 +69,24 @@
     });
   }
 
-  // 监听来自 Popup 的重新扫描指令（添加关键词后立即响应）
+  // 浮动 Toast 提示
+  function showToastNotification(text, isSuccess = true) {
+    let toast = document.getElementById('threads-filter-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'threads-filter-toast';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = text;
+    toast.className = 'threads-filter-toast show ' + (isSuccess ? 'success' : 'warn');
+
+    if (toast._timer) clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+      toast.className = 'threads-filter-toast hide';
+    }, 2400);
+  }
+
+  // 监听来自 Popup 或 Background 的指令
   if (chrome.runtime && chrome.runtime.onMessage) {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === 'PING') {
@@ -81,6 +98,9 @@
         updateKeywordsCache(filterConfig.keywords);
         performFullScan();
         sendResponse({ status: 'RESCAN_DONE' });
+      } else if (request.action === 'SHOW_TOAST') {
+        showToastNotification(request.message, request.isSuccess !== false);
+        sendResponse({ status: 'TOAST_SHOWN' });
       }
     });
   }

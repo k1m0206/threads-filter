@@ -20,6 +20,7 @@ const version = baseManifest.version || '1.0.0';
 
 // 包含打包的文件和目录列表
 const INCLUDE_PATHS = [
+  'background.js',
   'content.js',
   'content.css',
   'utils/text-normalizer.js',
@@ -204,6 +205,9 @@ function buildFirefoxPackage() {
 
   // Firefox 专属配置
   const firefoxManifest = Object.assign({}, baseManifest, {
+    background: {
+      scripts: ["background.js"]
+    },
     browser_specific_settings: {
       gecko: {
         id: "threads-filter@extension.local",
