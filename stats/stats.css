@@ -53,7 +53,7 @@ body {
 }
 
 .stats-container {
-  max-width: 860px;
+  max-width: 960px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -265,11 +265,39 @@ button {
   }
 }
 
-/* 关键词排行榜 */
+.rank-section,
+.daily-section {
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 关键词排行榜（加长以舒适容纳 TOP 100） */
 .rank-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 6px;
+  flex: 1;
+}
+
+.rank-list::-webkit-scrollbar,
+.daily-table-wrapper::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.rank-list::-webkit-scrollbar-thumb,
+.daily-table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: 4px;
+}
+
+.rank-list::-webkit-scrollbar-thumb:hover,
+.daily-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .rank-item {
@@ -281,15 +309,19 @@ button {
 .rank-meta {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 12px;
 }
 
 .rank-word {
   font-weight: 600;
+  max-width: 75%;
+  word-break: break-all;
 }
 
 .rank-count {
   color: var(--text-muted);
+  font-feature-settings: "tnum";
 }
 
 .rank-progress-bg {
@@ -306,10 +338,14 @@ button {
   border-radius: 9999px;
 }
 
-/* 每日明细表格 */
+/* 每日明细表格框（显著加长并可顺滑滚动） */
 .daily-table-wrapper {
   overflow-x: auto;
-  max-height: 250px;
+  overflow-y: auto;
+  max-height: 520px;
+  min-height: 480px;
+  flex: 1;
+  padding-right: 2px;
 }
 
 .daily-table {
@@ -320,7 +356,7 @@ button {
 }
 
 .daily-table th, .daily-table td {
-  padding: 8px 10px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--card-border);
 }
 
@@ -330,11 +366,12 @@ button {
   position: sticky;
   top: 0;
   background-color: var(--card-bg);
+  z-index: 2;
 }
 
 .empty-hint {
   text-align: center;
-  padding: 20px 0;
+  padding: 60px 0;
   color: var(--text-muted);
   font-size: 12px;
 }

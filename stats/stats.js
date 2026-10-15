@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const topEntries = entries.slice(0, 10);
+    const topEntries = entries.slice(0, 100);
     const highest = topEntries[0][1] || 1;
 
     let html = '';
