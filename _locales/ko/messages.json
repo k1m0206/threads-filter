@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "ThreadsFilter",
+    "description": "The name of the extension"
+  },
+  "appDesc": {
+    "message": "Threads 웹용 키워드 필터 도우미. 사용자, 본문, 댓글 필터링 및 다크/라이트 모드 지원.",
+    "description": "The description of the extension"
+  }
+}

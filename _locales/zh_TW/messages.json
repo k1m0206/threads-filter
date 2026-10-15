@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Threads伴侶",
+    "description": "The name of the extension"
+  },
+  "appDesc": {
+    "message": "Threads 網頁版關鍵詞過濾伴侶，支援用戶名、正文及留言區過濾，支援簡繁互通，選中文字右鍵快速新增屏蔽詞，自由切換深淺色主題。",
+    "description": "The description of the extension"
+  }
+}

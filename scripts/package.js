@@ -34,6 +34,7 @@ const INCLUDE_PATHS = [
   'icons/icon16.png',
   'icons/icon48.png',
   'icons/icon128.png',
+  '_locales',
   'README.md'
 ];
 
@@ -155,19 +156,33 @@ function createZipBuffer(files) {
 }
 
 /**
- * 收集基础文件内容
+ * 递归收集文件内容
  */
 function collectBaseFiles() {
   const files = [];
-  INCLUDE_PATHS.forEach(relPath => {
+
+  function addPath(relPath) {
     const fullPath = path.join(ROOT_DIR, relPath);
-    if (fs.existsSync(fullPath)) {
+    if (!fs.existsSync(fullPath)) {
+      console.warn(`[Warning] 缺少文件: ${relPath}`);
+      return;
+    }
+    const stat = fs.statSync(fullPath);
+    if (stat.isDirectory()) {
+      const entries = fs.readdirSync(fullPath);
+      entries.forEach(entry => {
+        addPath(path.join(relPath, entry));
+      });
+    } else {
       const content = fs.readFileSync(fullPath);
       files.push({ name: relPath, content });
-    } else {
-      console.warn(`[Warning] 缺少文件: ${relPath}`);
     }
+  }
+
+  INCLUDE_PATHS.forEach(relPath => {
+    addPath(relPath);
   });
+
   return files;
 }
 
