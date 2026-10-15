@@ -1,6 +1,6 @@
 {
   "name": "threads-filter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Threads伴侣 (ThreadsFilter) - Threads 网页版过滤插件",
   "scripts": {
     "build": "node scripts/package.js",

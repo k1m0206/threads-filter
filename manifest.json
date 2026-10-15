@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Threads伴侣",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ThreadsFilter - Threads 网页版关键词过滤伴侣，支持用户名、正文及评论区过滤，支持多语言与简繁互通，选中文字右键快速添加屏蔽词，自由切换深浅色主题。",
   "permissions": [
     "storage",

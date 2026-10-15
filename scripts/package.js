@@ -2,8 +2,8 @@
  * Threads 关键词过滤助手 - 纯原生跨平台插件打包脚本
  * 零第三方依赖，纯 Node.js 内置 API (fs, path, zlib)
  * 自动生成：
- * 1. dist/threads-filter-chrome-v1.0.0.zip
- * 2. dist/threads-filter-firefox-v1.0.0.zip (含 gecko id 与 Firefox WebExtension 专属配置)
+ * 1. dist/threads-filter-chrome-v1.0.1.zip
+ * 2. dist/threads-filter-firefox-v1.0.1.zip (含 gecko id 与 Firefox WebExtension 专属配置)
  */
 
 const fs = require('fs');
