@@ -15,6 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const tagsContainer = document.getElementById('tagsContainer');
   const emptyState = document.getElementById('emptyState');
   const keywordCount = document.getElementById('keywordCount');
+  const toggleExpandBtn = document.getElementById('toggleExpandBtn');
+  const expandFooter = document.getElementById('expandFooter');
+  const bottomExpandBtn = document.getElementById('bottomExpandBtn');
+  const bottomExpandText = document.getElementById('bottomExpandText');
   const clearAllBtn = document.getElementById('clearAllBtn');
   const batchBtn = document.getElementById('batchBtn');
   const batchModal = document.getElementById('batchModal');
@@ -28,6 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const resetStatBtn = document.getElementById('resetStatBtn');
   const rescanBtn = document.getElementById('rescanBtn');
   const statusMsg = document.getElementById('statusMsg');
+
+  let isExpanded = false;
 
   let currentConfig = {
     enabled: true,
@@ -83,6 +89,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function updateExpandUI() {
+    const count = (currentConfig.keywords || []).length;
+    if (count === 0) {
+      if (toggleExpandBtn) toggleExpandBtn.style.display = 'none';
+      if (expandFooter) expandFooter.style.display = 'none';
+      tagsContainer.classList.remove('expanded');
+      return;
+    }
+
+    if (toggleExpandBtn) toggleExpandBtn.style.display = '';
+
+    if (isExpanded) {
+      tagsContainer.classList.add('expanded');
+      if (toggleExpandBtn) {
+        toggleExpandBtn.textContent = t('btnCollapse');
+        toggleExpandBtn.title = t('collapseList');
+      }
+      if (bottomExpandBtn) bottomExpandBtn.classList.add('expanded');
+      if (bottomExpandText) bottomExpandText.textContent = t('collapseList');
+      if (expandFooter) expandFooter.style.display = count > 8 ? 'flex' : 'none';
+    } else {
+      tagsContainer.classList.remove('expanded');
+      if (toggleExpandBtn) {
+        toggleExpandBtn.textContent = t('btnExpandAll');
+        toggleExpandBtn.title = t('btnExpandAll');
+      }
+      if (bottomExpandBtn) bottomExpandBtn.classList.remove('expanded');
+      if (bottomExpandText) bottomExpandText.textContent = t('expandShowAll', { count });
+      if (expandFooter) expandFooter.style.display = count > 8 ? 'flex' : 'none';
+    }
+  }
+
+  function toggleExpand() {
+    isExpanded = !isExpanded;
+    updateExpandUI();
+    if (chrome.storage && chrome.storage.local) {
+      chrome.storage.local.set({ threads_filter_tags_expanded: isExpanded });
+    }
+  }
+
   function renderKeywords() {
     const keywords = currentConfig.keywords || [];
     keywordCount.textContent = keywords.length;
@@ -93,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
       emptyState.style.display = 'block';
       emptyState.textContent = t('emptyKeywords');
       tagsContainer.appendChild(emptyState);
+      updateExpandUI();
       return;
     }
 
@@ -116,6 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
       chip.appendChild(removeBtn);
       tagsContainer.appendChild(chip);
     });
+
+    updateExpandUI();
   }
 
   /**
@@ -234,6 +283,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function loadConfigAndRender() {
+    if (chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(['threads_filter_tags_expanded'], (res) => {
+        isExpanded = !!(res && res.threads_filter_tags_expanded);
+        updateExpandUI();
+      });
+    }
+
     if (!chrome.storage || !chrome.storage.sync) return;
     chrome.storage.sync.get(['threads_filter_config'], (result) => {
       if (result && result.threads_filter_config) {
@@ -354,6 +410,14 @@ document.addEventListener('DOMContentLoaded', () => {
     triggerImmediatePageFilter();
     showStatus(t('statusRescanSuccess'));
   });
+
+  if (toggleExpandBtn) {
+    toggleExpandBtn.addEventListener('click', toggleExpand);
+  }
+
+  if (bottomExpandBtn) {
+    bottomExpandBtn.addEventListener('click', toggleExpand);
+  }
 
   init();
 });

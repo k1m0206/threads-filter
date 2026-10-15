@@ -79,12 +79,21 @@
       <div class="list-header">
         <span class="list-title"><span data-i18n="listTitle">已屏蔽词</span> (<span id="keywordCount">0</span>)</span>
         <div class="list-actions">
+          <button id="toggleExpandBtn" class="btn-text" data-i18n="btnExpandAll" title="展开显示全部">展开全部</button>
           <button id="batchBtn" class="btn-text" data-i18n="btnBatch">批量</button>
           <button id="clearAllBtn" class="btn-text danger" data-i18n="btnClearAll">清空</button>
         </div>
       </div>
       <div class="tags-container" id="tagsContainer">
         <div class="empty-state" id="emptyState" data-i18n="emptyKeywords">暂无屏蔽词</div>
+      </div>
+      <div class="expand-footer" id="expandFooter" style="display: none;">
+        <button id="bottomExpandBtn" class="btn-expand-more">
+          <span id="bottomExpandText" data-i18n="btnExpandAll">展开显示全部</span>
+          <svg id="bottomExpandIcon" class="icon-chevron" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
       </div>
     </div>
 

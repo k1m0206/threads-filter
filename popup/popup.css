@@ -54,13 +54,26 @@
 
 body {
   width: 350px;
+  max-height: 590px;
   background-color: var(--bg-color);
   color: var(--text-main);
   font-family: var(--font-family);
   font-size: 13px;
   line-height: 1.4;
   overflow-x: hidden;
+  overflow-y: auto;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+body::-webkit-scrollbar {
+  width: 5px;
+}
+body::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: 4px;
+}
+body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .app-container {
@@ -340,9 +353,15 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-height: 140px;
+  max-height: 130px;
   overflow-y: auto;
   padding-right: 2px;
+  transition: max-height 0.22s ease-in-out;
+}
+
+.tags-container.expanded {
+  max-height: none;
+  overflow-y: visible;
 }
 
 .tags-container::-webkit-scrollbar {
@@ -351,6 +370,44 @@ button {
 .tags-container::-webkit-scrollbar-thumb {
   background: var(--card-border);
   border-radius: 4px;
+}
+.tags-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* 底部展开/收起栏 */
+.expand-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+.btn-expand-more {
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  border: 1px dashed var(--card-border);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-expand-more:hover {
+  color: var(--text-main);
+  border-color: var(--text-sub);
+  background-color: var(--tag-hover);
+}
+
+.btn-expand-more .icon-chevron {
+  transition: transform 0.2s ease;
+}
+
+.btn-expand-more.expanded .icon-chevron {
+  transform: rotate(180deg);
 }
 
 .empty-state {
