@@ -30,6 +30,49 @@
   let statsFlushTimer = null;
 
   /**
+   * 判断当前页面是否为排除页面（如 /insights 数据分析页面）
+   * 包含 threads.net/insights 以及 threads.com/insights 及其所有子路由
+   */
+  function isExcludedPage() {
+    try {
+      const path = (window.location.pathname || '').toLowerCase();
+      return path === '/insights' || path.startsWith('/insights/');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // SPA 路由动态监测
+  let lastObservedUrl = window.location.href;
+  function checkUrlChange() {
+    try {
+      const currentUrl = window.location.href;
+      if (currentUrl !== lastObservedUrl) {
+        lastObservedUrl = currentUrl;
+        if (!isExcludedPage()) {
+          scheduleScan();
+        }
+      }
+    } catch (e) {}
+  }
+
+  window.addEventListener('popstate', checkUrlChange);
+  const origPushState = history.pushState;
+  if (typeof origPushState === 'function') {
+    history.pushState = function () {
+      origPushState.apply(this, arguments);
+      checkUrlChange();
+    };
+  }
+  const origReplaceState = history.replaceState;
+  if (typeof origReplaceState === 'function') {
+    history.replaceState = function () {
+      origReplaceState.apply(this, arguments);
+      checkUrlChange();
+    };
+  }
+
+  /**
    * 刷新关键词缓存
    */
   function updateKeywordsCache(rawKeywords) {
@@ -92,6 +135,10 @@
       if (request.action === 'PING') {
         sendResponse({ status: 'OK' });
       } else if (request.action === 'RESCAN') {
+        if (isExcludedPage()) {
+          sendResponse({ status: 'SKIPPED_EXCLUDED_PAGE' });
+          return;
+        }
         if (request.keywords && Array.isArray(request.keywords)) {
           filterConfig.keywords = request.keywords;
         }
@@ -278,6 +325,7 @@
    * 检查单个卡片容器
    */
   function inspectAndFilterCard(card) {
+    if (isExcludedPage()) return false;
     if (!card || !card.isConnected) return false;
     if (card.dataset.threadsRemoved === 'true') return true;
 
@@ -314,6 +362,10 @@
    * 全量深度扫描（自顶向下 + 穿透式扫描）
    */
   function performFullScan() {
+    if (isExcludedPage()) {
+      return;
+    }
+
     if (!filterConfig.enabled || normalizedKeywords.length === 0) {
       return;
     }
@@ -360,6 +412,7 @@
   }
 
   function scheduleScan() {
+    if (isExcludedPage()) return;
     if (scanTimer) clearTimeout(scanTimer);
     scanTimer = setTimeout(performFullScan, SCAN_DELAY);
   }
@@ -369,6 +422,9 @@
    */
   function initObserver() {
     const observer = new MutationObserver((mutations) => {
+      checkUrlChange();
+      if (isExcludedPage()) return;
+
       let needsScan = false;
       for (let i = 0; i < mutations.length; i++) {
         const m = mutations[i];
