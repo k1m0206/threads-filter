@@ -74,24 +74,32 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
  * 向所有 Threads 标签页广播重新扫描消息
  */
 function broadcastRescanToThreadsTabs(newKeywords) {
-  chrome.tabs.query({}, (tabs) => {
-    if (!tabs) return;
-    tabs.forEach(tab => {
-      if (tab.url && (tab.url.includes('threads.net') || tab.url.includes('threads.com'))) {
-        chrome.tabs.sendMessage(tab.id, { action: 'RESCAN', keywords: newKeywords }, (res) => {
-          // 如果该标签页尚未注入脚本，动态注入并执行
-          if (chrome.runtime.lastError || !res) {
-            if (chrome.scripting && chrome.scripting.executeScript) {
-              chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                files: ['utils/text-normalizer.js', 'content.js']
-              }).then(() => {
-                chrome.tabs.sendMessage(tab.id, { action: 'RESCAN', keywords: newKeywords });
-              }).catch(() => {});
+  const storageArea = (chrome.storage && chrome.storage.sync) ? chrome.storage.sync : chrome.storage.local;
+  if (!storageArea) return;
+
+  storageArea.get(['threads_filter_config'], (cfgRes) => {
+    const config = (cfgRes && cfgRes.threads_filter_config) || { keywords: newKeywords };
+    config.keywords = newKeywords;
+
+    chrome.tabs.query({}, (tabs) => {
+      if (!tabs) return;
+      tabs.forEach(tab => {
+        if (tab.url && (tab.url.includes('threads.net') || tab.url.includes('threads.com'))) {
+          chrome.tabs.sendMessage(tab.id, { action: 'RESCAN', config: config, keywords: newKeywords }, (res) => {
+            // 如果该标签页尚未注入脚本，动态注入并执行
+            if (chrome.runtime.lastError || !res) {
+              if (chrome.scripting && chrome.scripting.executeScript) {
+                chrome.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  files: ['utils/text-normalizer.js', 'content.js']
+                }).then(() => {
+                  chrome.tabs.sendMessage(tab.id, { action: 'RESCAN', config: config, keywords: newKeywords });
+                }).catch(() => {});
+              }
             }
-          }
-        });
-      }
+          });
+        }
+      });
     });
   });
 }

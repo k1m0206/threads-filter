@@ -177,8 +177,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!tabs) return;
       tabs.forEach(tab => {
         if (tab.url && (tab.url.includes('threads.net') || tab.url.includes('threads.com'))) {
-          // 1. 发送 RESCAN 消息携带最新关键词列表
-          chrome.tabs.sendMessage(tab.id, { action: 'RESCAN', keywords: currentConfig.keywords }, (res) => {
+          // 1. 发送 RESCAN 消息携带最新关键词列表和完整配置（包含简繁互通开关）
+          chrome.tabs.sendMessage(tab.id, { action: 'RESCAN', config: currentConfig, keywords: currentConfig.keywords }, (res) => {
             // 2. 如果通信失败（说明此标签页是在扩展重载前打开的，尚未注入最新脚本），直接通过 scripting 动态注入！
             if (chrome.runtime.lastError || !res) {
               if (chrome.scripting && chrome.scripting.executeScript) {
@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   target: { tabId: tab.id },
                   files: ['utils/text-normalizer.js', 'content.js']
                 }).then(() => {
-                  chrome.tabs.sendMessage(tab.id, { action: 'RESCAN', keywords: currentConfig.keywords });
+                  chrome.tabs.sendMessage(tab.id, { action: 'RESCAN', config: currentConfig, keywords: currentConfig.keywords });
                 }).catch(() => {});
               }
             }

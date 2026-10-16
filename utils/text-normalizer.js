@@ -53,8 +53,10 @@
     // 繁体统一转简体
     if (convertTradToSimp) {
       cleaned = toSimplifiedChinese(cleaned);
-      // 两岸高频网络对等词归一化（私讯 与 私信 互通匹配）
+      // 两岸高频网络对等词与异体词归一化
       cleaned = cleaned.replace(/私[讯訊]/g, '私信');
+      cleaned = cleaned.replace(/回[覆複]/g, '回复');
+      cleaned = cleaned.replace(/帐/g, '账');
     }
 
     return cleaned;

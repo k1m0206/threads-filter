@@ -139,6 +139,9 @@
           sendResponse({ status: 'SKIPPED_EXCLUDED_PAGE' });
           return;
         }
+        if (request.config) {
+          filterConfig = Object.assign(filterConfig, request.config);
+        }
         if (request.keywords && Array.isArray(request.keywords)) {
           filterConfig.keywords = request.keywords;
         }
