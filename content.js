@@ -73,13 +73,19 @@
   }
 
   /**
-   * 刷新关键词缓存
+   * 刷新关键词缓存（自动执行汉字简繁互转同步展开）
    */
   function updateKeywordsCache(rawKeywords) {
-    originalKeywords = Array.isArray(rawKeywords) ? rawKeywords.map(k => String(k).trim()).filter(Boolean) : [];
-    normalizedKeywords = originalKeywords.map(kw => {
-      return window.TextNormalizer ? window.TextNormalizer.normalize(kw, filterConfig.convertTradToSimp) : kw.toLowerCase();
-    });
+    if (window.TextNormalizer && window.TextNormalizer.expandKeywords) {
+      const expanded = window.TextNormalizer.expandKeywords(rawKeywords, filterConfig.convertTradToSimp);
+      normalizedKeywords = expanded.normalizedKeywords;
+      originalKeywords = expanded.originalKeywords;
+    } else {
+      originalKeywords = Array.isArray(rawKeywords) ? rawKeywords.map(k => String(k).trim()).filter(Boolean) : [];
+      normalizedKeywords = originalKeywords.map(kw => {
+        return window.TextNormalizer ? window.TextNormalizer.normalize(kw, filterConfig.convertTradToSimp) : kw.toLowerCase();
+      });
+    }
     // 递增规则版本号，失效旧的已检查标记
     currentRuleVersion++;
   }
@@ -219,7 +225,7 @@
   }
 
   /**
-   * 智能回溯算法：由任意子节点寻找最近的整条帖子/评论卡片容器
+   * 智能回溯算法：由任意子节点寻找最近的整条帖子/评论卡片/通知行容器
    */
   function findPostCardContainer(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
@@ -234,34 +240,46 @@
       return article;
     }
 
-    // 2. 基于属性容器
-    const pressable = node.closest('[data-pressable-container="true"]');
-    if (pressable) return pressable;
-
     const roleArticle = node.closest('[role="article"]');
     if (roleArticle) return roleArticle;
 
-    // 3. 自底向上逐层回溯：
+    // 2. 自底向上逐层回溯（精准识别无 article 场景，如 /activity 通知动态列表、搜索列表）
     let curr = node;
     let bestCandidate = null;
-    while (curr && curr !== document.body && curr !== document.documentElement) {
-      if (curr.matches && (curr.matches('article') || curr.matches('[data-pressable-container="true"]') || curr.matches('[role="article"]'))) {
-        return curr;
+
+    while (curr && curr.parentElement && curr !== document.body && curr !== document.documentElement) {
+      const parent = curr.parentElement;
+
+      // 如果已经到达主容器或页面顶层，返回已找到的最优项候选
+      if (parent.matches && parent.matches('main, [role="main"], body')) {
+        return bestCandidate || curr;
       }
 
-      // 如果容器包含作者链接或头像并且有明确的高度
-      if (curr.querySelector && (curr.querySelector('a[href^="/@"]') || curr.querySelector('a[role="link"][href*="/@"]')) && curr.offsetHeight > 40) {
+      // 检查当前容器是否包含作者/用户链接（含有 /@ 的链接）或头像图片
+      const hasAuthor = !!(curr.querySelector && (
+        curr.querySelector('a[href*="/@"]') ||
+        curr.querySelector('a[role="link"][href*="/@"]') ||
+        curr.querySelector('img[alt*="profile"], img[alt*="头像"]')
+      ));
+
+      if (hasAuthor) {
         bestCandidate = curr;
-        // 如果它的父容器包含多个同级项（说明当前 curr 是列表里的独立一条）
-        if (curr.parentElement && curr.parentElement.children.length > 1 && !curr.parentElement.matches('header, nav')) {
+        // 如果父容器包含多个同级项（说明当前 curr 是列表中的一条独立卡片/通知项），且父容器不是导航/标签栏
+        if (parent.children && parent.children.length > 1 && !parent.matches('header, nav, [role="navigation"], [role="tablist"]')) {
           return curr;
         }
       }
-      curr = curr.parentElement;
+
+      curr = parent;
     }
 
-    // 兜底：如果实在无法识别外层列表，直接返回当前包含文本的容器，确保立即在界面上看到消除效果！
-    return bestCandidate || node;
+    if (bestCandidate) return bestCandidate;
+
+    // 3. 兜底尝试 pressable 容器
+    const pressable = node.closest('[data-pressable-container="true"]');
+    if (pressable) return pressable;
+
+    return node;
   }
 
   /**
@@ -395,8 +413,8 @@
       if (card) inspectAndFilterCard(card);
     });
 
-    // 3. 穿透式扫描所有包含文本的元素（段落、正文、评论回复）
-    const textElements = document.querySelectorAll('[dir="auto"], p, span, a[role="link"]');
+    // 3. 穿透式扫描所有包含文本的元素（段落、正文、评论回复、所有链接）
+    const textElements = document.querySelectorAll('[dir="auto"], p, span, a');
     textElements.forEach(el => {
       // 排除本身已在被移除容器内的元素
       if (el.closest('.threads-filter-removed') || el.closest('[data-threads-removed="true"]')) return;
