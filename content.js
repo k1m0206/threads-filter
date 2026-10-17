@@ -326,23 +326,57 @@
   }
 
   /**
-   * 提取发帖人用户名/Handle
+   * 提取发帖人/评论者用户名、昵称及 Handle（排除时间戳链接文本）
    */
   function extractAuthorText(container) {
-    const list = [];
+    const list = new Set();
+
+    // 1. 提取作者主页链接及 Handle（严格排除发帖时间链接如 /post/DejT9zjG65I，防止把“14小时”误当作者名）
     const authorLinks = container.querySelectorAll('a[href*="/@"]');
     authorLinks.forEach(link => {
-      const txt = link.innerText || link.textContent;
-      if (txt) list.push(txt.trim());
       const href = link.getAttribute('href') || '';
+      const isPostTimeLink = href.includes('/post/');
+
+      // 从 URL 提取 handle（例如 @setnews -> setnews）
       const match = href.match(/\/@([^/?#]+)/);
-      if (match && match[1]) list.push(match[1]);
+      if (match && match[1]) {
+        list.add(match[1]);
+      }
+
+      // 提取链接可见文本（若为时间链接如“14小时”、“3分钟”，严禁作为作者名）
+      if (!isPostTimeLink) {
+        const txt = (link.innerText || link.textContent || '').trim();
+        if (txt && !/^\d+\s*(?:小时|分钟|秒|天|周|h|m|s|d|w)$/i.test(txt)) {
+          list.add(txt);
+        }
+      }
     });
-    return list.join(' ');
+
+    // 2. 提取头像图片的 alt（例如 alt="setnews的头像" -> 提取 setnews）
+    const avatarImgs = container.querySelectorAll('img[alt*="头像"], img[alt*="profile"]');
+    avatarImgs.forEach(img => {
+      const alt = img.getAttribute('alt') || '';
+      const m = alt.match(/^(.+?)(?:的头像|'s profile picture)/i);
+      if (m && m[1]) {
+        list.add(m[1].trim());
+      }
+    });
+
+    // 3. 提取配图作者标注（例如 alt="Photo by 哪吒墩 on October 16, 2026"）
+    const photoImgs = container.querySelectorAll('img[alt*="Photo by"]');
+    photoImgs.forEach(img => {
+      const alt = img.getAttribute('alt') || '';
+      const m = alt.match(/Photo by\s+([^.]+?)\s+on/i);
+      if (m && m[1]) {
+        list.add(m[1].trim());
+      }
+    });
+
+    return Array.from(list).join(' ');
   }
 
   /**
-   * 提取正文和评论文本（排除按钮文字等）
+   * 提取正文和评论文本（排除按钮文字、图标等系统干扰）
    */
   function extractContentText(container) {
     const clone = container.cloneNode(true);
