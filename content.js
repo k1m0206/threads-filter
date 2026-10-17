@@ -225,11 +225,11 @@
   }
 
   /**
-   * 检验容器是否为合法的“单条”帖子/评论/通知卡片
-   * 严禁将整个 Feed 列表容器、整个列布局或包含多条帖子的祖先作为卡片隐藏！
+   * 检验容器是否为合法的“单条”帖子/评论卡片
+   * 严禁将整个 Feed 列表容器、整个列布局或包含多条帖子的外壳作为卡片隐藏！
    */
   function isSafeCardContainer(container) {
-    if (!container || !container.isConnected) return false;
+    if (!container || !container.isConnected || container.nodeType !== Node.ELEMENT_NODE) return false;
 
     // 1. 绝对不可以是根节点、主体、页面布局
     const tag = (container.tagName || '').toLowerCase();
@@ -237,16 +237,17 @@
       return false;
     }
 
-    if (container.getAttribute && (
-      container.getAttribute('role') === 'main' ||
-      container.getAttribute('role') === 'navigation' ||
-      container.getAttribute('role') === 'tablist' ||
-      container.getAttribute('role') === 'search'
-    )) {
-      return false;
+    if (container.getAttribute) {
+      const role = container.getAttribute('role');
+      if (['main', 'navigation', 'tablist', 'search', 'progressbar', 'region', 'feed'].includes(role)) {
+        return false;
+      }
     }
 
-    // 2. 绝对不可以是 main 或 body 的直接子容器（顶级列布局容器）
+    // 2. 绝对不可以是顶级页面布局容器
+    if (container.id && (container.id.includes('layout') || container.id.includes('mount'))) {
+      return false;
+    }
     if (container.parentElement) {
       const pTag = (container.parentElement.tagName || '').toLowerCase();
       const pRole = container.parentElement.getAttribute ? container.parentElement.getAttribute('role') : '';
@@ -255,97 +256,70 @@
       }
     }
 
-    // 3. 单条卡片绝对不能包含多个 article（若包含多个，必定为 Feed 或列表外壳）
+    // 3. 核心隔离守则：单条卡片内部绝对不能包含其他独立的 pressable 卡片（若包含，必定为 Feed 列表或评论区总容器）
+    const childPressables = container.querySelectorAll ? container.querySelectorAll('[data-pressable-container="true"]') : [];
+    if (childPressables.length > 0) {
+      for (let i = 0; i < childPressables.length; i++) {
+        if (childPressables[i] !== container) {
+          return false; // 存在非自身的子卡片，证明当前容器是包含多条内容的列表外壳！
+        }
+      }
+    }
+
+    // 4. 单条卡片内部不能包含多个 article 标签
     if (container.querySelectorAll && container.querySelectorAll('article').length > 1) {
       return false;
     }
 
-    // 4. 单条卡片绝对不能包含过多作者链接（超过3个必定为 Feed 或评论列表容器）
+    // 5. 单条卡片作者账号数校验（不同用户名去重后不超过 2 个，防止误判多帖列表外壳）
     if (container.querySelectorAll) {
       const authorLinks = container.querySelectorAll('a[href*="/@"]');
-      if (authorLinks.length > 3) {
+      const uniqueHandles = new Set();
+      for (let i = 0; i < authorLinks.length; i++) {
+        const href = authorLinks[i].getAttribute('href') || '';
+        const match = href.match(/\/@([^/?#]+)/);
+        if (match && match[1]) {
+          uniqueHandles.add(match[1]);
+        }
+      }
+      if (uniqueHandles.size > 2) {
         return false;
       }
     }
 
-    // 5. 绝对不能包含评论输入框或发帖表单
-    if (container.querySelector && container.querySelector('form, textarea, [contenteditable="true"]')) {
-      return false;
+    // 6. 保护评论区异步加载：绝对不可将转圈 loading 占位器当成卡片隐藏
+    if (container.querySelector && container.querySelector('[role="progressbar"], svg[aria-label*="正在加载"], svg[aria-label*="Loading"]')) {
+      const text = container.innerText || container.textContent || '';
+      if (text.trim().length === 0) {
+        return false;
+      }
     }
 
     return true;
   }
 
   /**
-   * 智能回溯算法：由任意子节点寻找最近的整条帖子/评论卡片/通知行容器
+   * 智能定位算法：由命中节点精准收敛至最近的独立卡片/评论容器
+   * 采用精准锚定，坚决不进行无休止的向上爬树，杜绝越界误杀 Feed 外壳
    */
   function findPostCardContainer(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
 
-    // 保护规则 1：如果是系统 UI 控件、输入框或导航，绝不作为待屏蔽卡片
-    if (node.closest('button, [role="button"], form, textarea, [contenteditable="true"], nav, header, [role="navigation"], [role="tablist"], [role="progressbar"]')) {
+    // 保护规则 1：系统全局 UI 控件（顶部栏、侧边栏、导航栏、全局进度条），绝不参与卡片屏蔽
+    if (node.closest('nav, header, [role="navigation"], [role="tablist"], [role="progressbar"]')) {
       return null;
     }
 
-    // 1. 标准语义标签：优先使用最近的 article（最标准安全）
-    const article = node.closest('article');
+    // 1. Threads 最权威核心定位器：最近的独立卡片容器（每一个帖子、每一条评论均为独立的 pressable 容器）
+    const pressable = node.closest('[data-pressable-container="true"]');
+    if (pressable) {
+      return isSafeCardContainer(pressable) ? pressable : null;
+    }
+
+    // 2. 标准语义标签：兼容可能存在的 article / role=article
+    const article = node.closest('article, [role="article"]');
     if (article) {
       return isSafeCardContainer(article) ? article : null;
-    }
-
-    const roleArticle = node.closest('[role="article"]');
-    if (roleArticle) {
-      return isSafeCardContainer(roleArticle) ? roleArticle : null;
-    }
-
-    // 2. 自底向上逐层回溯（精准识别无 article 场景，如 /activity 通知动态列表、单条评论项）
-    let curr = node;
-    let candidate = null;
-
-    while (curr && curr.parentElement && curr !== document.body && curr !== document.documentElement) {
-      const parent = curr.parentElement;
-
-      // 绝不越界到 main 或顶级布局列
-      if (parent.matches && parent.matches('main, [role="main"], body')) {
-        break;
-      }
-
-      // 绝不可包含表单、评论输入框、或者包含整个 article
-      if (curr.querySelector && (curr.querySelector('form, textarea, [contenteditable="true"]') || curr.querySelector('article'))) {
-        break;
-      }
-
-      // 检查当前容器是否包含作者/用户链接（含有 /@ 的链接）或头像图片
-      const hasAuthor = !!(curr.querySelector && (
-        curr.querySelector('a[href*="/@"]') ||
-        curr.querySelector('a[role="link"][href*="/@"]') ||
-        curr.querySelector('img[alt*="profile"], img[alt*="头像"]')
-      ));
-
-      if (hasAuthor) {
-        const authorCount = curr.querySelectorAll ? curr.querySelectorAll('a[href*="/@"]').length : 0;
-        if (authorCount <= 2) {
-          candidate = curr;
-          // 如果父容器包含多个同级项（说明当前 curr 是列表中的一条独立卡片/通知项/评论项）
-          if (parent.children && parent.children.length > 1 && !parent.matches('header, nav, [role="navigation"], [role="tablist"]')) {
-            if (isSafeCardContainer(curr)) {
-              return curr;
-            }
-          }
-        }
-      }
-
-      curr = parent;
-    }
-
-    if (candidate && isSafeCardContainer(candidate)) {
-      return candidate;
-    }
-
-    // 3. 兜底尝试 pressable 容器（严格进行安全卡片校验）
-    const pressable = node.closest('[data-pressable-container="true"]');
-    if (pressable && isSafeCardContainer(pressable)) {
-      return pressable;
     }
 
     return null;
@@ -446,7 +420,7 @@
   }
 
   /**
-   * 全量深度扫描（自顶向下 + 穿透式扫描）
+   * 全量深度扫描（原子卡片级直达 + 穿透式文本扫描）
    */
   function performFullScan() {
     if (isExcludedPage()) {
@@ -457,10 +431,18 @@
       return;
     }
 
-    // 1. 扫描所有作者链接
+    // 1. 直达扫描所有原子卡片（首页单帖、详情页主帖、详情页每一条独立评论）
+    const allCards = document.querySelectorAll('[data-pressable-container="true"], article, [role="article"]');
+    allCards.forEach(card => {
+      if (isSafeCardContainer(card)) {
+        inspectAndFilterCard(card);
+      }
+    });
+
+    // 2. 扫描作者链接（确保作者名命中时卡片被快速隐藏）
     const authorLinks = document.querySelectorAll('a[href*="/@"]');
     authorLinks.forEach(link => {
-      if (link.closest('.threads-filter-removed, [data-threads-removed="true"], nav, header, form, [role="navigation"]')) return;
+      if (link.closest('.threads-filter-removed, [data-threads-removed="true"], nav, header, [role="navigation"]')) return;
 
       const txt = (link.innerText || '') + ' ' + (link.getAttribute('href') || '');
       if (window.TextNormalizer) {
@@ -474,21 +456,14 @@
       }
     });
 
-    // 2. 扫描所有常规卡片（仅识别真正的 article 或 role=article 帖子卡片，绝不扫描全屏 pressable 外壳）
-    const topCards = document.querySelectorAll('article, [role="article"]');
-    topCards.forEach(node => {
-      const card = findPostCardContainer(node);
-      if (card) inspectAndFilterCard(card);
-    });
-
-    // 3. 穿透式扫描所有包含文本的元素（段落、正文、评论回复、所有链接）
-    const textElements = document.querySelectorAll('[dir="auto"], p, span, a');
+    // 3. 穿透式扫描所有包含文本的元素（段落、正文、补充评论）
+    const textElements = document.querySelectorAll('[dir="auto"], p');
     textElements.forEach(el => {
       // 排除本身已在被移除容器内的元素
-      if (el.closest('.threads-filter-removed') || el.closest('[data-threads-removed="true"]')) return;
+      if (el.closest('.threads-filter-removed, [data-threads-removed="true"]')) return;
 
-      // 排除系统按钮、输入框、导航栏、进度条内的 UI 文字，避免因操作按钮文案（如“回复”、“分享”、“赞”）误杀卡片
-      if (el.closest('button, [role="button"], form, textarea, [contenteditable="true"], nav, header, [role="navigation"], [role="tablist"], [role="progressbar"], svg')) {
+      // 排除导航、侧边栏、进度条
+      if (el.closest('nav, header, [role="navigation"], [role="tablist"], [role="progressbar"], svg')) {
         return;
       }
 
