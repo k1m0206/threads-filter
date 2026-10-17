@@ -52,8 +52,8 @@ node scripts/package.js
 ```
 
 构建产物位于 `dist/` 目录：
-- Chrome / Edge: `dist/threads-filter-chrome-v1.0.3.zip`
-- Firefox: `dist/threads-filter-firefox-v1.0.3.zip` 及 `.xpi`
+- Chrome / Edge: `dist/threads-filter-chrome-v1.0.4.zip`
+- Firefox: `dist/threads-filter-firefox-v1.0.4.zip` 及 `.xpi`
 
 ---
 
@@ -66,4 +66,4 @@ node scripts/package.js
 
 ### Firefox
 1. 打开 `about:debugging#/runtime/this-firefox`。
-2. 点击「临时载入附加组件」，选择 `dist/threads-filter-firefox-v1.0.3.zip` 即可。
+2. 点击「临时载入附加组件」，选择 `dist/threads-filter-firefox-v1.0.4.zip` 即可。

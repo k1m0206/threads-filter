@@ -225,6 +225,58 @@
   }
 
   /**
+   * 检验容器是否为合法的“单条”帖子/评论/通知卡片
+   * 严禁将整个 Feed 列表容器、整个列布局或包含多条帖子的祖先作为卡片隐藏！
+   */
+  function isSafeCardContainer(container) {
+    if (!container || !container.isConnected) return false;
+
+    // 1. 绝对不可以是根节点、主体、页面布局
+    const tag = (container.tagName || '').toLowerCase();
+    if (['html', 'body', 'main', 'header', 'nav', 'footer', 'form'].includes(tag)) {
+      return false;
+    }
+
+    if (container.getAttribute && (
+      container.getAttribute('role') === 'main' ||
+      container.getAttribute('role') === 'navigation' ||
+      container.getAttribute('role') === 'tablist' ||
+      container.getAttribute('role') === 'search'
+    )) {
+      return false;
+    }
+
+    // 2. 绝对不可以是 main 或 body 的直接子容器（顶级列布局容器）
+    if (container.parentElement) {
+      const pTag = (container.parentElement.tagName || '').toLowerCase();
+      const pRole = container.parentElement.getAttribute ? container.parentElement.getAttribute('role') : '';
+      if (pTag === 'main' || pRole === 'main' || pTag === 'body') {
+        return false;
+      }
+    }
+
+    // 3. 单条卡片绝对不能包含多个 article（若包含多个，必定为 Feed 或列表外壳）
+    if (container.querySelectorAll && container.querySelectorAll('article').length > 1) {
+      return false;
+    }
+
+    // 4. 单条卡片绝对不能包含过多作者链接（超过3个必定为 Feed 或评论列表容器）
+    if (container.querySelectorAll) {
+      const authorLinks = container.querySelectorAll('a[href*="/@"]');
+      if (authorLinks.length > 3) {
+        return false;
+      }
+    }
+
+    // 5. 绝对不能包含评论输入框或发帖表单
+    if (container.querySelector && container.querySelector('form, textarea, [contenteditable="true"]')) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * 智能回溯算法：由任意子节点寻找最近的整条帖子/评论卡片/通知行容器
    */
   function findPostCardContainer(node) {
@@ -235,14 +287,16 @@
       return null;
     }
 
-    // 1. 标准语义标签：优先使用最近的 article
+    // 1. 标准语义标签：优先使用最近的 article（最标准安全）
     const article = node.closest('article');
     if (article) {
-      return article;
+      return isSafeCardContainer(article) ? article : null;
     }
 
     const roleArticle = node.closest('[role="article"]');
-    if (roleArticle) return roleArticle;
+    if (roleArticle) {
+      return isSafeCardContainer(roleArticle) ? roleArticle : null;
+    }
 
     // 2. 自底向上逐层回溯（精准识别无 article 场景，如 /activity 通知动态列表、单条评论项）
     let curr = node;
@@ -269,21 +323,28 @@
       ));
 
       if (hasAuthor) {
-        candidate = curr;
-        // 如果父容器包含多个同级项（说明当前 curr 是列表中的一条独立卡片/通知项/评论项）
-        if (parent.children && parent.children.length > 1 && !parent.matches('header, nav, [role="navigation"], [role="tablist"]')) {
-          return curr;
+        const authorCount = curr.querySelectorAll ? curr.querySelectorAll('a[href*="/@"]').length : 0;
+        if (authorCount <= 2) {
+          candidate = curr;
+          // 如果父容器包含多个同级项（说明当前 curr 是列表中的一条独立卡片/通知项/评论项）
+          if (parent.children && parent.children.length > 1 && !parent.matches('header, nav, [role="navigation"], [role="tablist"]')) {
+            if (isSafeCardContainer(curr)) {
+              return curr;
+            }
+          }
         }
       }
 
       curr = parent;
     }
 
-    if (candidate) return candidate;
+    if (candidate && isSafeCardContainer(candidate)) {
+      return candidate;
+    }
 
-    // 3. 兜底尝试 pressable 容器（确保不越界到布局顶层）
+    // 3. 兜底尝试 pressable 容器（严格进行安全卡片校验）
     const pressable = node.closest('[data-pressable-container="true"]');
-    if (pressable && pressable.parentElement && !pressable.parentElement.matches('main, [role="main"], body')) {
+    if (pressable && isSafeCardContainer(pressable)) {
       return pressable;
     }
 
@@ -322,9 +383,8 @@
     if (!container || !container.isConnected) return;
     if (container.dataset.threadsRemoved === 'true') return;
 
-    // 绝对安全屏障：坚决不可隐藏 body, main, 整个页面列布局或输入表单！
-    if (container.matches('main, [role="main"], body, html, form') || 
-        (container.parentElement && container.parentElement.matches('main, [role="main"], body'))) {
+    // 绝对安全屏障：坚决不可隐藏非安全卡片容器（防止整页消失）！
+    if (!isSafeCardContainer(container)) {
       return;
     }
 
@@ -414,8 +474,8 @@
       }
     });
 
-    // 2. 扫描所有常规卡片
-    const topCards = document.querySelectorAll('article, [data-pressable-container="true"], [role="article"]');
+    // 2. 扫描所有常规卡片（仅识别真正的 article 或 role=article 帖子卡片，绝不扫描全屏 pressable 外壳）
+    const topCards = document.querySelectorAll('article, [role="article"]');
     topCards.forEach(node => {
       const card = findPostCardContainer(node);
       if (card) inspectAndFilterCard(card);
