@@ -230,29 +230,35 @@
   function findPostCardContainer(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
 
-    // 1. 标准语义标签
+    // 保护规则 1：如果是系统 UI 控件、输入框或导航，绝不作为待屏蔽卡片
+    if (node.closest('button, [role="button"], form, textarea, [contenteditable="true"], nav, header, [role="navigation"], [role="tablist"], [role="progressbar"]')) {
+      return null;
+    }
+
+    // 1. 标准语义标签：优先使用最近的 article
     const article = node.closest('article');
     if (article) {
-      const parent = article.parentElement;
-      if (parent && parent.children.length === 1 && !parent.matches('main, [role="main"], body')) {
-        return parent;
-      }
       return article;
     }
 
     const roleArticle = node.closest('[role="article"]');
     if (roleArticle) return roleArticle;
 
-    // 2. 自底向上逐层回溯（精准识别无 article 场景，如 /activity 通知动态列表、搜索列表）
+    // 2. 自底向上逐层回溯（精准识别无 article 场景，如 /activity 通知动态列表、单条评论项）
     let curr = node;
-    let bestCandidate = null;
+    let candidate = null;
 
     while (curr && curr.parentElement && curr !== document.body && curr !== document.documentElement) {
       const parent = curr.parentElement;
 
-      // 如果已经到达主容器或页面顶层，返回已找到的最优项候选
+      // 绝不越界到 main 或顶级布局列
       if (parent.matches && parent.matches('main, [role="main"], body')) {
-        return bestCandidate || curr;
+        break;
+      }
+
+      // 绝不可包含表单、评论输入框、或者包含整个 article
+      if (curr.querySelector && (curr.querySelector('form, textarea, [contenteditable="true"]') || curr.querySelector('article'))) {
+        break;
       }
 
       // 检查当前容器是否包含作者/用户链接（含有 /@ 的链接）或头像图片
@@ -263,8 +269,8 @@
       ));
 
       if (hasAuthor) {
-        bestCandidate = curr;
-        // 如果父容器包含多个同级项（说明当前 curr 是列表中的一条独立卡片/通知项），且父容器不是导航/标签栏
+        candidate = curr;
+        // 如果父容器包含多个同级项（说明当前 curr 是列表中的一条独立卡片/通知项/评论项）
         if (parent.children && parent.children.length > 1 && !parent.matches('header, nav, [role="navigation"], [role="tablist"]')) {
           return curr;
         }
@@ -273,13 +279,15 @@
       curr = parent;
     }
 
-    if (bestCandidate) return bestCandidate;
+    if (candidate) return candidate;
 
-    // 3. 兜底尝试 pressable 容器
+    // 3. 兜底尝试 pressable 容器（确保不越界到布局顶层）
     const pressable = node.closest('[data-pressable-container="true"]');
-    if (pressable) return pressable;
+    if (pressable && pressable.parentElement && !pressable.parentElement.matches('main, [role="main"], body')) {
+      return pressable;
+    }
 
-    return node;
+    return null;
   }
 
   /**
@@ -314,6 +322,12 @@
     if (!container || !container.isConnected) return;
     if (container.dataset.threadsRemoved === 'true') return;
 
+    // 绝对安全屏障：坚决不可隐藏 body, main, 整个页面列布局或输入表单！
+    if (container.matches('main, [role="main"], body, html, form') || 
+        (container.parentElement && container.parentElement.matches('main, [role="main"], body'))) {
+      return;
+    }
+
     container.dataset.threadsRemoved = 'true';
 
     if (filterConfig.logToConsole) {
@@ -328,18 +342,10 @@
     recordBlockStat(keyword);
 
     // 强力 CSS 视觉压制：高度归零、边框归零、溢出隐藏
+    // 注意：绝不使用 parentNode.removeChild，保持 React 虚拟 DOM 树完整，防止 React 渲染崩溃及评论区无限转圈
     container.style.cssText = 'display: none !important; visibility: hidden !important; height: 0px !important; min-height: 0px !important; max-height: 0px !important; margin: 0px !important; padding: 0px !important; border: none !important; overflow: hidden !important; pointer-events: none !important; opacity: 0 !important; font-size: 0px !important; line-height: 0 !important;';
     container.classList.add('threads-filter-removed');
     container.setAttribute('aria-hidden', 'true');
-
-    // 从 DOM 彻底移除
-    try {
-      if (container.parentNode) {
-        container.parentNode.removeChild(container);
-      } else {
-        container.remove();
-      }
-    } catch (e) {}
   }
 
   /**
@@ -394,6 +400,8 @@
     // 1. 扫描所有作者链接
     const authorLinks = document.querySelectorAll('a[href*="/@"]');
     authorLinks.forEach(link => {
+      if (link.closest('.threads-filter-removed, [data-threads-removed="true"], nav, header, form, [role="navigation"]')) return;
+
       const txt = (link.innerText || '') + ' ' + (link.getAttribute('href') || '');
       if (window.TextNormalizer) {
         const match = window.TextNormalizer.checkMatch(txt, normalizedKeywords, originalKeywords, filterConfig.convertTradToSimp);
@@ -418,6 +426,11 @@
     textElements.forEach(el => {
       // 排除本身已在被移除容器内的元素
       if (el.closest('.threads-filter-removed') || el.closest('[data-threads-removed="true"]')) return;
+
+      // 排除系统按钮、输入框、导航栏、进度条内的 UI 文字，避免因操作按钮文案（如“回复”、“分享”、“赞”）误杀卡片
+      if (el.closest('button, [role="button"], form, textarea, [contenteditable="true"], nav, header, [role="navigation"], [role="tablist"], [role="progressbar"], svg')) {
+        return;
+      }
 
       const txt = el.innerText || el.textContent;
       if (txt && txt.length >= 1 && window.TextNormalizer) {
